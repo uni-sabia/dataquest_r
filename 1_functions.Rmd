@@ -1,0 +1,103 @@
+---
+title: "Creating an efficient data analysis workflow 1"
+author: "Uni Lee"
+date: "11/28/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+```
+
+Welcome to the first guided project on Datqquest! 
+
+# Creating an efficient data analysis flow using functions, for loops, if-else statements
+
+Simulated sales data can be downloaded here: https://data.world/dataquest/book-reviews
+
+In this guided project, we will be acting as a data analyst for a company that sells books for learning programming. Your company has produced multiple books, and each has received many reviews. Your company wants we to check out the sales data and see if we can extract any useful information from it. 
+
+1. Checking the dataset
+
+```{r message=FALSE}
+# Load data
+raw <- read.csv("data/1_book_reviews.csv")
+
+# How big is the data?
+dim(raw)
+
+# What are the main variables? 
+colnames(raw)
+
+# What are the types of the columns?
+str(raw)
+
+# or, you can use "for" loop to check types of column names. But I find this unintuitive
+for (c in colnames(raw)) {
+  print(typeof(raw[[c]]))
+}
+## Recall that you can access a column in a tibble with double bracket syntax tibble_data[["column_name"]] where tibble_data is a tibble and column_name is a string with the column name. 
+
+# What are the unique values present in each of the columns?
+for (c in colnames(raw)) {
+  print("Unique values in the column:")
+  print(c)
+  print(unique(raw[[c]]))
+  print("")
+}
+
+```
+2. Cleaning
+
+```{r message=FALSE}
+# Do which columns have missing data? => "Review"
+# remove NAs
+review <- raw %>% 
+  filter(!is.na(review))
+dim(review) # About 10% of the dataset was lost
+
+# State column has consistent data
+unique(review$state)
+
+review_a <- review %>% 
+  mutate(
+    state = case_when(
+      state == "California" ~ "CA",
+      state == "New York" ~ "NY",
+      state == "Texas" ~ "TX",
+      state == "Florida" ~ "FL",
+      TRUE ~ state
+    )
+  )
+
+# Transform text rating into numeric rating
+
+review_b <- review_a %>% 
+  mutate( review_num = case_when(
+          review == "Poor" ~ 1,
+          review == "Fair" ~ 2,
+          review == "Good" ~ 3,
+          review == "Great" ~ 4,
+          review == "Excellent" ~ 5),
+          is_high_review = if_else(review_num >= 4, TRUE, FALSE)
+  )
+
+```
+
+3. Analysis
+
+"Secrets of R For Advanced Students" generates the most revenue because both the price and sales are high. However, Fundamentals of R For Beginners is sells the most. 
+
+``` {r message=FALSE}
+# What is the most profitable book?
+## Revenue = price * quantity sold
+
+profit <- review_b %>% group_by(book, price) %>% 
+  summarise(count = n())  %>% 
+  mutate(revenue = price*count) %>% arrange(desc(revenue))
+profit
+
+```
+
