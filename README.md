@@ -1,2 +1,2 @@
-# dataquest_r
-Guided projects for mastering R on Dataquest
+# Projects for mastering R on Dataquest
+Guided projects
