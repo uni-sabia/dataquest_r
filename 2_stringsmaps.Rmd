@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message=FALSE, warming=FALSE)
 library(tidyverse)
 library(dplyr)
 library(lubridate)
@@ -94,7 +94,9 @@ sales_b <- sales_b %>%
 # Analysis
 ## Was the new book program effective in increasing book sales? 
 
-```{r}
+The analysis below shows that the marketing program increased sales for Secrets of R For Advanced Students and R For Dummies. For other books, the marketing program had either negligible or negative effect on sales. 
+
+```{r warning=FALSE}
 
 # Create a dummy variable that tells whether the purchase was made before or after the marketing program
 sales_b <- sales_b %>% mutate(
@@ -104,7 +106,7 @@ sales_b <- sales_b %>% mutate(
 # Purchase before and after the marketing program
 summary <- sales_b %>% group_by(after, title) %>% 
   summarize(purchase = sum(purchase)) %>% arrange(title, after) %>% as_data_frame()
-summary %>% kable()
+summary %>% kable() %>% kable_styling()
 
 ggplot(summary, aes(x=purchase, y=title, fill=after)) +
   geom_bar(stat="identity", position=position_dodge()) +
@@ -112,15 +114,23 @@ ggplot(summary, aes(x=purchase, y=title, fill=after)) +
   theme(axis.title.y=element_blank()) +
   labs(fill = "After July 1, 2019")
 
-# The analysis shows that the marketing program increased sales for Secrets of R For Advanced Students and R For Dummies. For other books, the marketing program had either negligible or negative effect on sales. 
 ```
 
 ## Did it have a different effect on different customers?
 
-```{r}
-summary2 <- sales_b %>% group_by(after, title, customer_type) %>% 
-  summarize(purchase = sum(purchase)) %>% arrange(title, after, customer_type) %>% as_data_frame()
-summary2 %>% kable()
+The analysis below shows that the marketing program had a more positive effect on business customers.
+
+```{r message= FALSE}
+summary2 <- sales_b %>% group_by(after, customer_type) %>% 
+  summarize(purchase = sum(purchase)) %>% arrange(after, customer_type) %>% as_data_frame()
+summary2 %>% kable() %>% kable_styling()
+
+ggplot(summary2, aes(x=customer_type, y=purchase, fill=after)) +
+  geom_bar(stat="identity", position=position_dodge()) +
+  theme_minimal() + 
+  labs(fill = "After July 1, 2019") +
+  theme(axis.title.x = element_blank())
+
 ```
 
 
