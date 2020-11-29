@@ -1,0 +1,126 @@
+---
+title: "String Manipulation and Map Function"
+author: "Uni Lee"
+date: "11/29/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(kableExtra)
+```
+We are taking on the role of as an analyst for a book company. The company has provided us more data on some of its 2019 book sales, and it wants us to extract some usable knowledge from it. It launched a new program encouraging customers to buy more books on July 1st, 2019, and it wants to know if this new program was successful at increasing sales and improving review quality. As the analyst, this will be your job to figure out for the guided project.
+
+# Data exploration
+```{r}
+raw <- read.csv("data/2_sales2019.csv")
+str(raw) 
+```
+
+```{r message = FALSE}
+# Column names
+names(raw) # variable names
+```
+```{r}
+# types of columns are...
+for (col in colnames(raw)) {
+  paste0(col, " : ", typeof(raw[[col]])) %>% print()
+}
+
+```
+```{r}
+# Missing data?
+for (col in colnames(raw)) {
+  paste0(col,
+         ", number of rows with missing data: ",
+         is.na(raw[[col]]) %>%  sum) %>% print
+}
+```
+# Handle missing data
+
+Missing data in user review column will have to be eliminated.
+However, we can preserve data by replacing NAs in total_purchased column with average value.
+
+```{r}
+# Remove NAs in review column
+sales_a <- raw %>% filter(!is.na(user_submitted_review))
+
+# Calculate average of total purchase 
+average <- raw %>% filter(!is.na(total_purchased)) %>% 
+  summarize(average = mean(total_purchased)) %>% pull() 
+
+# Replace NAs with average values
+sales_b <- sales_a %>% mutate(
+  purchase = ifelse(is.na(total_purchased),
+                    average,
+                    total_purchased)
+  )
+```
+# String Manipulation to Process Review Data
+
+```{r}
+# Unique reviews
+unique(sales_b$user_submitted_review)
+
+# Found an NA that was read as a valid string (""). Replace it with NA
+sales_b$user_submitted_review[sales_b$user_submitted_review==""] <- NA
+# And clean it again
+sales_b <- sales_b %>% filter(!is.na(user_submitted_review))
+
+```
+When examining unique reviews, we can see that positive reviews contain words like "awesome", "learned a lot". Negative reviews contains words like "hate", "not recommend". Neutral reviews contain words like "okay", "OK". 
+
+```{r}
+# This is a function that detects whether the review was positive or negative.
+
+is_positive <- function(review) {
+  review_positive = case_when(
+    str_detect(review, "Awesome") ~ TRUE,
+    str_detect(review, "learned") ~ TRUE,
+    TRUE ~ FALSE
+  )
+}
+
+sales_b <- sales_b %>% 
+  mutate(is_positive = unlist
+         (map(user_submitted_review, is_positive)))
+
+```
+
+# Analysis
+## Was the new book program effective in increasing book sales? 
+
+```{r}
+
+# Create a dummy variable that tells whether the purchase was made before or after the marketing program
+sales_b <- sales_b %>% mutate(
+  after = if_else(ymd(date) >= ymd("2019/07/01"), TRUE, FALSE)
+  )
+
+# Purchase before and after the marketing program
+summary <- sales_b %>% group_by(after, title) %>% 
+  summarize(purchase = sum(purchase)) %>% arrange(title, after) %>% as_data_frame()
+summary %>% kable()
+
+ggplot(summary, aes(x=purchase, y=title, fill=after)) +
+  geom_bar(stat="identity", position=position_dodge()) +
+  theme_minimal() +
+  theme(axis.title.y=element_blank()) +
+  labs(fill = "After July 1, 2019")
+
+# The analysis shows that the marketing program increased sales for Secrets of R For Advanced Students and R For Dummies. For other books, the marketing program had either negligible or negative effect on sales. 
+```
+
+## Did it have a different effect on different customers?
+
+```{r}
+summary2 <- sales_b %>% group_by(after, title, customer_type) %>% 
+  summarize(purchase = sum(purchase)) %>% arrange(title, after, customer_type) %>% as_data_frame()
+summary2 %>% kable()
+```
+
+
