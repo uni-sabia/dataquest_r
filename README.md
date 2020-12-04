@@ -2,3 +2,4 @@
 Guided projects
 
 1. Creating an efficient data analysis workflow
+2. String Manipulation and Map Function
