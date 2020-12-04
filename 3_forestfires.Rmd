@@ -1,0 +1,151 @@
+---
+title: "Visualizing Forest Fire Data"
+author: "Uni Lee"
+date: "12/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+```
+
+Forecasting forest fires is important to minimize environmental and economic damages. [Cortez and Morais](http://www3.dsi.uminho.pt/pcortez/fires.pdf) used a Data Mining approach to predict burned area of forest fires in Portugal. 
+
+In this exercise, we will perform an exploratory analysis of the forest fire dataset via visualization. 
+
+# Data 
+## Understanding the raw data structure
+```{r}
+# Load data from https://archive.ics.uci.edu/ml/machine-learning-databases/forest-fires/
+fire_raw <- read.csv("data/3_forestfires.csv")
+str(fire_raw)
+```
+Each row represents a forest fire event. There are 13 variables that describe each event. Refer to the following description of each variable, taken from the codebook. 
+
+* X: X-axis spatial coordinate within the Montesinho park map (1 to 9)
+* *Y*: Y-axis spatial coordinate within the Montesinho park map (2 to 9)
+* *month*: Month of the year: 'jan' to 'dec'
+* *day*: Day of the week ('mon' to 'sun')
+* *FFMC*: Fine Fuel Moisture Code index from the FWI system (18.7 to 96.20). This code is an indicator of the relative ease of ignition and the flammability of fine fuel.
+* *DMC*: Duff Moisture Code index from the FWI system (1.1 to 291.3). It is a numeric rating of the average moisture content of loosely compacted organic layers of moderate depth. This code gives an indication of fuel consumption in moderate duff layers and medium-size woody material.
+* *DC*: Drought Code index from the FWI system (7.9 to 860.6). This code is a useful indicator of seasonal drought effects on forest fuels and the amount of smoldering in deep duff layers and large logs.
+* *ISI*: Initial Spread Index from the FWI system (0.0 to 56.10). It is a numeric rating of the expected rate of fire spread, calculated based on wind speed and FFMC.
+* *temp*: Temperature in Celsius degrees (2.2 to 33.30)
+* *RH*: Relative humidity in percentage: 15.0 to 100
+* *wind*: Wind speed in km/h: 0.40 to 9.40
+* *rain*: Outside rain in mm/m2 : 0.0 to 6.4
+* *area*: The burned area of the forest (in ha): 0.00 to 1090.84
+
+*The acronym FWI stands for "fire weather index", a method used by scientists to quantify risk factors for forest fires. Read more [here](https://cwfis.cfs.nrcan.gc.ca/background/summary/fwi)*
+
+## Prepping data for visualization
+
+```{r}
+# Convert the month and day into a categorical variable, making sure that the months and day are ordered correctly (rather than in alphabetical order). 
+
+fire <- fire_raw %>% mutate(
+  month = factor(month, levels= c("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")),
+  day = factor(day, levels = c("mon", "tue", "wed", "thu", "fri", "sat", "sun"))
+)
+```
+
+# Visualization
+## Which months and days of the week do forest fires happen the most?
+
+During the months of August and September, forest fires occur the most frequently. 
+
+```{r message=FALSE, warning= FALSE, error=FALSE}
+# by month
+count_month <- fire %>% group_by(month) %>% 
+  summarize(count = n()) %>% as_data_frame()
+
+ggplot(count_month, aes(x=month, y=count)) + 
+  geom_col() + 
+  labs(title = "Number of forest fired by month") +
+  theme_minimal() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.title = element_text(hjust=0.5)) 
+```
+
+Forest fires are more likely to occur during weekends (fri-sun) than weekdays (mon-thu). 
+
+```{r}
+# by day
+count_day <- fire %>% group_by(day) %>% 
+  summarize(count = n())
+
+ggplot(count_day, aes(x=day, y=count)) + 
+  geom_col() + 
+  labs(title = "Number of forest fired by day") +
+  theme_minimal() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        plot.title = element_text(hjust=0.5)) 
+```
+
+## Examining time variance of other variables
+
+During the months of Aug-Sept, the following variables exhibit high values, showing positive correlation with frequency of forest fires.
+* DC
+* DMC
+* Temperature
+
+```{r error=FALSE, message=FALSE, warning==FALSE}
+# Turn the wide format into a long format
+fire_long <- fire %>% pivot_longer(
+  cols=c("FFMC", "DMC", "DC", "ISI", "temp", "RH", "wind", "rain", "area"),
+  names_to = "var",
+  values_to = "value"
+)
+
+# Graph it!
+## We use boxplot here because there are many outliers.  
+ggplot(fire_long, aes(x=month, y=value)) +
+  geom_boxplot() +
+  facet_wrap(vars(var), scales="free_y") +
+  labs(title = "Monthly changes in variables")
+
+
+```
+
+## Relationship between severity of forest fires and other variables
+
+The area of burned forest is used as a proxy for "severity". The following scatterplots show that DC, FFMC, and temperature are strongly correlated with severity of forest fires. 
+
+```{r}
+fire_long_area <- fire %>% pivot_longer(
+  cols=c("FFMC", "DMC", "DC", "ISI", "temp", "RH", "wind", "rain"),
+  names_to = "var",
+  values_to = "value"
+)
+
+ggplot(fire_long_area, aes(x=value, y=area)) +
+  geom_point() +
+  facet_wrap(vars(var), scales="free_x") +
+  labs(title = "Relationship between severity (area burned) and other variables")
+
+# There are outliers in "area" variable that are distorting the visualization. To gain a more accurate understanding of the relationship, we will get rid of the outliers and graph again. 
+
+fire_long_area_outlier <- fire_long_area %>% filter(area<300)
+ggplot(fire_long_area_outlier, aes(y=area, x=value)) +
+  geom_point() +
+  facet_wrap(vars(var), scales="free_x") +
+  labs(title = "Relationship between severity (area burned) and other variables")
+
+```
+
+# Conclusion
+
+Our exploratory data visualization has revealed that: 
+
+* DC (Drought Code Index) and temperature can be used as a predictor of both frequency and severity of forest fires.
+
+* FFMC (Fine Fuel Moisture Code index) can be used as a predictor of severity of forest fires.
+
+* DMC (Duff Moisture Code index) can be used as a predictor of frequency of forest fires.
+
+
