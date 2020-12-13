@@ -1,0 +1,63 @@
+--- 
+title: "Analysing perceptions of NYC schools"
+author: "Uni Lee"
+date: "12/13/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(janitor)
+library(dplyr)
+```
+# Introduction
+
+In this guided project, we will answer the following research questions by analyzing 4 datasets on demographic and test scores from the [New York City Department of Education](https://www.schools.nyc.gov). 
+
+
+* Do student, teacher, and parent perceptions of NYC school quality appear to be related to demographic and academic success metrics?
+* Do students, teachers, and parents have similar perceptions of NYC school quality?
+
+# Data
+
+The NYC Department of Education surveys all parents, teachers and students in grades 6-12 to assess  the community's opinions on academic expectations, communication, engagement, and safety and respect. The survey results can be downloaded [here](https://data.cityofnewyork.us/Education/2011-NYC-School-Survey/mnz3-dyi8). 
+
+We will also use a combined dataset that we cleaned during the Dataquest mission. This dataset contains information on each school and academic performance. The data can be downloaded [here](https://data.world/dataquest/nyc-schools-data/workspace/file?filename=combined.csv).
+
+```{r}
+# Survey data for "general education" schools
+gened_raw<- read_excel("data/4_nycschool/masterfile11_gened_final.xlsx", sheet=1, na="NA", skip=2) %>% clean_names()
+
+# Survey data for "special education" schools (district 75)
+sped_raw <- read_excel("data/4_nycschool/masterfile11_d75_final.xlsx", sheet=1, na="NA", skip=2) %>% clean_names()
+
+# Cleaned and combined dataset on academic performance of NYC schools
+combined_raw <- read.csv("data/4_nycschool/combined.csv") %>% clean_names
+```
+
+## Processing data
+
+Variables related to the research questions are:
+* Information on school (dbn, location, sch_type)
+* School demographics 
+ + percentage of black, asian, hispanic and white students 
+ + 
+* academic success metrics
+ + average sat scores (avg_sat_score)
+
+* perception of school quality by parents (p), students (s) and teachers (t)
+ + Safety and Respect scores (starts with "saf")
+ + Communication scores (starts with "com")
+ + Engagement scores (starts with "eng")
+ + Academic expectations ("starts with "aca")
+
+```{r}
+# Select variables necessary for analysis. 
+# Since only high school students take SAT exams, filter out high schools in survey datasets.
+gened_1 <- gened_raw %>% select(dbn, starts_with("saf"), starts_with("saf"), starts_with("eng"))
+sped_1 <- sped_raw %>% select(dbn, starts_with("saf"), starts_with("saf"), starts_with("eng"))
+combined_1 <- combined_raw %>% select(dbn, school_name, avg_sat_score) 
+```
+
