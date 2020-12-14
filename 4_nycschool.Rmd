@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(readxl)
 library(janitor)
 library(dplyr)
+library(corrplot)
 ```
 # Introduction
 
@@ -40,24 +41,47 @@ combined_raw <- read.csv("data/4_nycschool/combined.csv") %>% clean_names
 ## Processing data
 
 Variables related to the research questions are:
-* Information on school (dbn, location, sch_type)
+* Information on school (dbn, school_name)
 * School demographics 
- + percentage of black, asian, hispanic and white students 
+ + Percentage of black, asian, hispanic and white students (ends with "_per")
  + 
+ 
 * academic success metrics
  + average sat scores (avg_sat_score)
 
-* perception of school quality by parents (p), students (s) and teachers (t)
+* Perception of school quality by parents (p), students (s) and teachers (t). We will create a new variable that gives composite scores of the following sub-scores.
  + Safety and Respect scores (starts with "saf")
  + Communication scores (starts with "com")
  + Engagement scores (starts with "eng")
  + Academic expectations ("starts with "aca")
 
 ```{r}
+# Create a new variable for composite scores for perception of the quality of education 
+
+
 # Select variables necessary for analysis. 
-# Since only high school students take SAT exams, filter out high schools in survey datasets.
-gened_1 <- gened_raw %>% select(dbn, starts_with("saf"), starts_with("saf"), starts_with("eng"))
-sped_1 <- sped_raw %>% select(dbn, starts_with("saf"), starts_with("saf"), starts_with("eng"))
-combined_1 <- combined_raw %>% select(dbn, school_name, avg_sat_score) 
+gened <- gened_raw %>% select(dbn, starts_with("saf"), starts_with("com"), starts_with("eng"), starts_with("aca"))
+sped <- sped_raw %>%  select(dbn, starts_with("saf"), starts_with("com"), starts_with("eng"), starts_with("aca"))
+combined <- combined_raw %>% select(dbn, school_name, avg_sat_score, ends_with("_per")) 
+
+
+# Combine the general education and District 75 survey dataframes and school information.
+survey_all <- bind_rows(gened, sped) 
+# Used "inner_join" function in order to retain data on schools that have both demographic information and perception of quality. 
+survey_all <- inner_join(combined, survey_all, by="dbn")
+
+# How many missing values?
+sapply(survey_all, function(x) sum(is.na(x)))
 ```
-somethingwentwrong
+
+# Analysis
+## Do student, teacher, and parent perceptions of NYC school quality appear to be related to demographic and academic success metrics?
+
+To answer this question, we can calculate Pearson correlation coefficient for relevant variables. This statistic measures linear correlation between two variables. We can also visualize correlations among variables using corrplot function from dplyr package.
+
+
+```{r}
+# Compute Pearson's correlation coefficient
+cor(survey_all[,3:25])
+```
+
