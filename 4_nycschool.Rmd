@@ -60,4 +60,4 @@ gened_1 <- gened_raw %>% select(dbn, starts_with("saf"), starts_with("saf"), sta
 sped_1 <- sped_raw %>% select(dbn, starts_with("saf"), starts_with("saf"), starts_with("eng"))
 combined_1 <- combined_raw %>% select(dbn, school_name, avg_sat_score) 
 ```
-
+somethingwentwrong
