@@ -14,6 +14,7 @@ library(dplyr)
 library(corrplot)
 library(tidyr)
 library(ggcorrplot)
+library(ggplot2)
 ```
 # Introduction
 
@@ -104,6 +105,8 @@ colSums(is.na(survey_complete))
 # Analysis
 ## Do student, teacher, and parent perceptions of NYC school quality appear to be related to demographic and academic success metrics?
 
+### Correlation Metrics
+
 To answer this question, we can calculate Pearson correlation coefficient for relevant variables. This statistic measures linear correlation between two variables. We can also visualize correlations among variables using corrplot function from dplyr package.
 
 ```{r}
@@ -125,4 +128,33 @@ Academic performance indicator is *negatively* correlated with the following var
 
 The correlation coefficients also suggest that the more hispanic and black students the school has, the lower the perceived quality of education is. 
 
+### Academic Performance and racial demographics
+
+The correlational analyis above affirms that there is racial inequality in academic performance. How strong is the relationship between academic performance and racial demographics? 
+
+```{r warning=FALSE, message=FALSE}
+# Visualize relationship among variables
+## For legends
+legend <- c("black_per" = "red",
+            "white_per" = "blue",
+            "asian_per" = "green",
+            "hispanic_per" = "purple")
+ggplot(survey_complete, aes(y=avg_sat_score)) +
+        geom_smooth(aes(x=black_per), color="red") +
+        geom_smooth(aes(x=white_per), color="blue") +
+        geom_smooth(aes(x=asian_per), color="green") +
+        geom_smooth(aes(x=hispanic_per), color="purple") +
+        geom_point(aes(x=black_per), color="red", alpha=0.1) +
+        geom_point(aes(x=white_per), color="blue", alpha=0.1) +
+        geom_point(aes(x=asian_per), color="green", alpha=0.1) +
+        geom_point(aes(x=hispanic_per), color="purple", alpha=0.1) +
+        theme_minimal() +
+        labs(title = "Academic Performance and Racial Demographics in Schools",
+             x= "Percentage of Students",
+             y="Total SAT Score",
+             color="Legend") +
+        theme(plot.title=element_text(hjust=0.5)) +
+        scale_color_manual(name="Legend", values=legend)
+
+```
 
