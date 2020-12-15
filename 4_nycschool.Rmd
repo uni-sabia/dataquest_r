@@ -12,6 +12,8 @@ library(readxl)
 library(janitor)
 library(dplyr)
 library(corrplot)
+library(tidyr)
+library(ggcorrplot)
 ```
 # Introduction
 
@@ -44,7 +46,6 @@ Variables related to the research questions are:
 * Information on school (dbn, school_name)
 * School demographics 
  + Percentage of black, asian, hispanic and white students (ends with "_per")
- + 
  
 * academic success metrics
  + average sat scores (avg_sat_score)
@@ -57,31 +58,71 @@ Variables related to the research questions are:
 
 ```{r}
 # Create a new variable for composite scores for perception of the quality of education 
-
+gened_raw <- gened_raw %>% mutate(
+        perqual_p = (saf_p_11 + com_p_11 + eng_p_11 + aca_p_11)/4, na.rm=TRUE,
+        perqual_s = (saf_s_11 + com_s_11 + eng_s_11 + aca_s_11)/4, na.rm=TRUE,
+        perqual_t = (saf_t_11 + com_t_11 + eng_t_11 + aca_t_11)/4, na.rm=TRUE) %>%
+        mutate(perqual = (perqual_p + perqual_s + perqual_t)/3, na.rm=TRUE)
+sped_raw <- gened_raw %>%  mutate(
+        perqual_p = (saf_p_11 + com_p_11 + eng_p_11 + aca_p_11)/4, na.rm=TRUE,
+        perqual_s = (saf_s_11 + com_s_11 + eng_s_11 + aca_s_11)/4, na.rm=TRUE,
+        perqual_t = (saf_t_11 + com_t_11 + eng_t_11 + aca_t_11)/4, na.rm=TRUE)%>%
+        mutate(perqual = (perqual_p + perqual_s + perqual_t)/3, na.rm=TRUE)
 
 # Select variables necessary for analysis. 
-gened <- gened_raw %>% select(dbn, starts_with("saf"), starts_with("com"), starts_with("eng"), starts_with("aca"))
-sped <- sped_raw %>%  select(dbn, starts_with("saf"), starts_with("com"), starts_with("eng"), starts_with("aca"))
-combined <- combined_raw %>% select(dbn, school_name, avg_sat_score, ends_with("_per")) 
-
+gened <- gened_raw %>% select(dbn, perqual)
+sped <- sped_raw %>%  select(dbn, perqual)
+combined <- combined_raw %>% select(dbn, school_name, avg_sat_score, ends_with("_per"), - male_per, -female_per) 
 
 # Combine the general education and District 75 survey dataframes and school information.
-survey_all <- bind_rows(gened, sped) 
-# Used "inner_join" function in order to retain data on schools that have both demographic information and perception of quality. 
-survey_all <- inner_join(combined, survey_all, by="dbn")
+survey <- bind_rows(gened, sped) 
+# Used "left_join" function in order to retain data on schools that have both demographic information and perception of quality. 
+survey_all <- left_join(combined, unique(survey), by="dbn") %>% select(dbn, school_name, avg_sat_score, perqual, white_per, asian_per, hispanic_per, black_per)
 
+```
+
+### Missing Data
+
+In order to measure relationship among variables, we must treat missing values before proceeding to analysis.
+
+```{r}
 # How many missing values?
 sapply(survey_all, function(x) sum(is.na(x)))
+
+# What kind of schools are missing SAT scores?
+
+# Impute missing SAT scores with average scores
+sat_avg <- mean(survey_all$avg_sat_score, na.rm=TRUE)
+survey_all$avg_sat_score <- replace_na(survey_all$avg_sat_score, sat_avg)
+
+# Drop schools that do not have demographic data
+survey_complete <- survey_all %>% drop_na()
+colSums(is.na(survey_complete))
 ```
+
 
 # Analysis
 ## Do student, teacher, and parent perceptions of NYC school quality appear to be related to demographic and academic success metrics?
 
 To answer this question, we can calculate Pearson correlation coefficient for relevant variables. This statistic measures linear correlation between two variables. We can also visualize correlations among variables using corrplot function from dplyr package.
 
-
 ```{r}
 # Compute Pearson's correlation coefficient
-cor(survey_all[,3:25])
+cor <- round(cor(survey_complete[,3:8]),2)
+
+# Visualize correlations
+ggcorrplot(cor, method="circle")
+
 ```
+The correlation analysis suggests that academic performance (avg_sat_score) is *positively* correlated with the following variables:
+
+* Perceived quality of education
+* Percentage of white students and Asian students
+
+Academic performance indicator is *negatively* correlated with the following variables:
+
+* Percentage of black and hispanic students
+
+The correlation coefficients also suggest that the more hispanic and black students the school has, the lower the perceived quality of education is. 
+
 
