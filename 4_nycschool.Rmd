@@ -1,5 +1,5 @@
 --- 
-title: "Analysing perceptions of NYC schools"
+title: "Exploring the relationship between racial demographics, academic performance and perception of education quality in NYC Schools"
 author: "Uni Lee"
 date: "12/13/2020"
 output: html_document
@@ -109,14 +109,6 @@ colSums(is.na(survey_complete))
 
 To answer this question, we can calculate Pearson correlation coefficient for relevant variables. This statistic measures linear correlation between two variables. We can also visualize correlations among variables using corrplot function from dplyr package.
 
-```{r}
-# Compute Pearson's correlation coefficient
-cor <- round(cor(survey_complete[,3:8]),2)
-
-# Visualize correlations
-ggcorrplot(cor, method="circle")
-
-```
 The correlation analysis suggests that academic performance (avg_sat_score) is *positively* correlated with the following variables:
 
 * Perceived quality of education
@@ -132,29 +124,38 @@ The correlation coefficients also suggest that the more hispanic and black stude
 
 The correlational analyis above affirms that there is racial inequality in academic performance. How strong is the relationship between academic performance and racial demographics? 
 
-```{r warning=FALSE, message=FALSE}
-# Visualize relationship among variables
-## For legends
-legend <- c("black_per" = "red",
-            "white_per" = "blue",
-            "asian_per" = "green",
-            "hispanic_per" = "purple")
-ggplot(survey_complete, aes(y=avg_sat_score)) +
-        geom_smooth(aes(x=black_per), color="red") +
-        geom_smooth(aes(x=white_per), color="blue") +
-        geom_smooth(aes(x=asian_per), color="green") +
-        geom_smooth(aes(x=hispanic_per), color="purple") +
-        geom_point(aes(x=black_per), color="red", alpha=0.1) +
-        geom_point(aes(x=white_per), color="blue", alpha=0.1) +
-        geom_point(aes(x=asian_per), color="green", alpha=0.1) +
-        geom_point(aes(x=hispanic_per), color="purple", alpha=0.1) +
-        theme_minimal() +
-        labs(title = "Academic Performance and Racial Demographics in Schools",
-             x= "Percentage of Students",
-             y="Total SAT Score",
-             color="Legend") +
-        theme(plot.title=element_text(hjust=0.5)) +
-        scale_color_manual(name="Legend", values=legend)
+Our data shows that the more Asian and white students a school has, the higher the average SAT scores will be. In contrast, schools whose demographic is dominantly black or hispanic are likely to score less on SAT. 
+
+```{r}
+# Compute Pearson's correlation coefficient
+cor <- round(cor(survey_complete[,3:8]),2)
+
+# Visualize correlations
+ggcorrplot(cor, method="circle")
 
 ```
+
+
+
+```{r warning=FALSE, message=FALSE}
+# Visualize relationship among variables
+## Prepare data for visualization
+plot_data <- survey_complete %>% pivot_longer(cols=ends_with("_per"),
+                                              names_to="race",
+                                              values_to="percentage")
+ggplot(plot_data, aes(x=percentage, y=avg_sat_score, color=race)) +
+        geom_smooth() +
+        geom_point(alpha=0.1) +
+        labs(title = "Academic Performance and Racial Demographics in Schools",
+             x= "Percentage of Students",
+             y="Total SAT Score") +
+        theme(plot.title=element_text(hjust=0.5)) +
+        scale_color_discrete(name="Demographic", labels=c("Asian","Black", "Hispanic", "White")) +
+        theme_light()
+
+```
+
+## Do students, teachers, and parents have similar perceptions of NYC school quality?
+
+
 
