@@ -1,8 +1,10 @@
 --- 
 title: "Exploring the relationship between racial demographics, academic performance and perception of education quality in NYC Schools"
 author: "Uni Lee"
-date: "12/13/2020"
-output: html_document
+date: "20/13/2020"
+output: 
+        html_document:
+        toc: true
 ---
 
 ```{r setup, include=FALSE, warning=FALSE, message=FALSE}
@@ -15,6 +17,7 @@ library(corrplot)
 library(tidyr)
 library(ggcorrplot)
 library(ggplot2)
+library(stringr)
 ```
 # Introduction
 
@@ -71,14 +74,14 @@ sped_raw <- gened_raw %>%  mutate(
         mutate(perqual = (perqual_p + perqual_s + perqual_t)/3, na.rm=TRUE)
 
 # Select variables necessary for analysis. 
-gened <- gened_raw %>% select(dbn, perqual)
-sped <- sped_raw %>%  select(dbn, perqual)
+gened <- gened_raw %>% select(dbn, perqual, ends_with("_11"))
+sped <- sped_raw %>%  select(dbn, perqual, ends_with("_11"))
 combined <- combined_raw %>% select(dbn, school_name, avg_sat_score, ends_with("_per"), - male_per, -female_per) 
 
 # Combine the general education and District 75 survey dataframes and school information.
 survey <- bind_rows(gened, sped) 
 # Used "left_join" function in order to retain data on schools that have both demographic information and perception of quality. 
-survey_all <- left_join(combined, unique(survey), by="dbn") %>% select(dbn, school_name, avg_sat_score, perqual, white_per, asian_per, hispanic_per, black_per)
+survey_all <- left_join(combined, unique(survey), by="dbn") %>% select(dbn, school_name, avg_sat_score, perqual, white_per, asian_per, hispanic_per, black_per, ends_with("_11"))
 
 ```
 
@@ -89,8 +92,6 @@ In order to measure relationship among variables, we must treat missing values b
 ```{r}
 # How many missing values?
 sapply(survey_all, function(x) sum(is.na(x)))
-
-# What kind of schools are missing SAT scores?
 
 # Impute missing SAT scores with average scores
 sat_avg <- mean(survey_all$avg_sat_score, na.rm=TRUE)
@@ -103,12 +104,22 @@ colSums(is.na(survey_complete))
 
 
 # Analysis
+
 ## Do student, teacher, and parent perceptions of NYC school quality appear to be related to demographic and academic success metrics?
 
-### Correlation Metrics
+### Correlation metrics to explore the relationship between academic performance and race
 
-To answer this question, we can calculate Pearson correlation coefficient for relevant variables. This statistic measures linear correlation between two variables. We can also visualize correlations among variables using corrplot function from dplyr package.
+To answer this question, we can calculate Pearson correlation coefficients for relevant variables. This statistic measures linear correlation between two variables. We can also visualize correlations among variables using corrplot function from dplyr package.
 
+
+```{r}
+# Compute Pearson's correlation coefficient
+cor <- round(cor(survey_complete[,3:8]),2)
+
+# Visualize correlations
+ggcorrplot(cor, method="circle")
+
+```
 The correlation analysis suggests that academic performance (avg_sat_score) is *positively* correlated with the following variables:
 
 * Perceived quality of education
@@ -119,22 +130,6 @@ Academic performance indicator is *negatively* correlated with the following var
 * Percentage of black and hispanic students
 
 The correlation coefficients also suggest that the more hispanic and black students the school has, the lower the perceived quality of education is. 
-
-### Academic Performance and racial demographics
-
-The correlational analyis above affirms that there is racial inequality in academic performance. How strong is the relationship between academic performance and racial demographics? 
-
-Our data shows that the more Asian and white students a school has, the higher the average SAT scores will be. In contrast, schools whose demographic is dominantly black or hispanic are likely to score less on SAT. 
-
-```{r}
-# Compute Pearson's correlation coefficient
-cor <- round(cor(survey_complete[,3:8]),2)
-
-# Visualize correlations
-ggcorrplot(cor, method="circle")
-
-```
-
 
 
 ```{r warning=FALSE, message=FALSE}
@@ -156,6 +151,57 @@ ggplot(plot_data, aes(x=percentage, y=avg_sat_score, color=race)) +
 ```
 
 ## Do students, teachers, and parents have similar perceptions of NYC school quality?
+
+Perception of the quality of education comprises 4 factors: 
+
+* Safety and Respect
+* Communication
+* Engagement
+* Academic Expectations
+
+In order to compare general perception of quality of education among groups, let us calculate an average for each category and group. 
+
+```{r warning=FALSE, message=FALSE}
+
+
+perception <- survey_complete %>% 
+        select(dbn, school_name, ends_with("_11"), -ends_with("tot_11"), -ends_with("q1_11")) %>%  pivot_longer(cols=saf_p_11:aca_s_11, 
+                     names_to="category",
+                     values_to="value") %>%
+        group_by(category) %>%
+        summarize(average=mean(value)) %>% as.data.frame() %>%
+        mutate(group= case_when(
+                str_detect(category, "p_11") ~ "Parent",
+                str_detect(category, "s_11") ~ "Student",
+                str_detect(category, "t_11") ~ "Teacher"),
+               category= case_when(
+                       str_detect(category, "aca") ~ "Academic",
+                       str_detect(category, "com") ~ "Communication",
+                       str_detect(category, "eng") ~ "Engagement",
+                       str_detect(category, "saf") ~ "Satisfaction"))
+
+ggplot(perception, aes(x=group, y=average, fill=category)) +
+        geom_col() +
+        theme_classic() +
+        ylim(0, 35) +
+        scale_fill_manual(values = c("#00AFBB", "#E7B800", "#FC4E07", "#8F4407")) +
+        labs(y="Average Score",
+             fill="Category",
+             title="Perceived Quality of Education by Group") +
+        theme(axis.title.x=element_blank(),
+              plot.title=element_text(hjust=0.5))
+
+        
+```
+The graph above shows that students tend to value their schools' quality of education less than parents and teachers. The difference is due to the fact that they experience poorer quality of communication and engagement. Meanwhile, parents score higher on overall satisfaction, communication and engagement. 
+
+# Conclusion
+
+Analysis of data on academic performance and perception of quality of education in NYC schools in 2011 revealed that there is a clear relationship between race and academic performance. The more Asian and white students a school has, the higher the average SAT scores will be. In contrast, schools whose demographic is dominantly black or Hispanic are likely to score less on SAT. 
+
+This calls to our attention the racial inequality in academic performance. Note that this data was collected in the year 2011. Governments must increase the quality of education in schools with higher ratio of black and Hispanic students. Furthermore, more recent data must be collected and evaluated to find out whether this gap has been addressed since 2011.
+
+The analysis also revealed that students tend to perceive the quality of education less than parents and teachers, especially in terms of communication and engagement. This suggests that teachers may be engaging and communicating more with parents. This should be corrected. The purpose of education is to empower students of all backgrounds, not parents. Schools must train their teachers on the importance of satisfying the educational needs of students. 
 
 
 
