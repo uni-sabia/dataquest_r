@@ -1,0 +1,161 @@
+---
+title: "Working with SQL database in R"
+author: "Uni Lee"
+date: "1/23/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RSQLite)
+library(DBI)
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+library(lubridate)
+```
+
+In this guided project, we will analyze a sample database available on SQLite. 
+
+# Data
+
+There are 11 tables in chinook database. The relationship between the tables are summarized [here](https://www.sqlitetutorial.net/sqlite-sample-database/), as shown in the image below.  
+
+![Map](data/6_sqliteinR/database_map.jpg)
+
+The datasets can be downloaded [here](https://www.sqlitetutorial.net/sqlite-sample-database/).
+
+To simplify codes for querying and managing connection to the database, we will create 2 helper functions.
+
+* run_query(): Connects with SQL database and saves the result in memory. Disconnect after fetching. 
+* show_tables(): Returns the list of all tables and views in the database. This is helpful for checking the status of the database as we work. 
+
+```{r}
+db <- 'data/6_sqliteinR/chinook.db' # Local file path of the database
+conn <- dbConnect(SQLite(), db) 
+
+run_query <- function(query) {
+  conn <- dbConnect(SQLite(), db)
+  result <- dbGetQuery(conn, query) # send the query and return the result (dbSendQuery + dbFetch)
+  dbDisconnect(conn) 
+  return(result)
+}
+
+show_tables <- function(){
+  query <- "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view')"
+  return(run_query(query))
+}
+
+# What datasets do we have? 
+show_tables()
+```
+
+# Which genres sell the best in the USA? 
+
+To understand which genres are the most popular in US store, we will calculate the *number of tracks sold in the USA and their share in total sales*. 
+
+To calculate this, we will write a series of queries that fetch the following variables. Then, we can group the resulting table by "Genre" to calculate total quantity and share.
+* Genre 
+* Track 
+* Quantity 
+* Location 
+
+We will use a sql code chunk to build our table using SQL language. Each code chunk saves the result as an R object. 
+
+To build this table, we start from the table that has the most important information. Then we keep adding variables from other tables. 
+
+```{sql, connection=conn, output.var = "popular_genre"}
+
+WITH df AS (SELECT g.name genre, il.invoice_line_id, t.name track_name, il.quantity 
+FROM invoice_line il
+INNER JOIN invoice i on il.invoice_id = i.invoice_id
+INNER JOIN track t on il.track_id = t.track_id
+INNER JOIN genre g on t.genre_id = g.genre_id
+WHERE i.billing_country="USA")
+
+SELECT genre, COUNT(invoice_line_id) sales,
+       ROUND(CAST(COUNT(df.invoice_line_id) AS FLOAT)/ 
+       (SELECT COUNT(invoice_line_id) FROM invoice_line)*100,2) percentage
+FROM df
+GROUP BY 1
+ORDER BY 2 DESC
+LIMIT 7;
+
+```
+
+We will visualize this data using ggplot 2. 
+
+```{r}
+popular_genre <- popular_genre %>% mutate(
+  percentage = paste(percentage, "%"))
+
+ggplot(popular_genre, aes(x=reorder(genre, -sales), y=sales, label=percentage, fill=genre)) + 
+  geom_bar(stat="identity") + 
+  geom_text(hjust=0.5, vjust=-0.5, size=3) + ylim(0, 650) + 
+  theme_tufte() + theme(
+    axis.title.x=element_blank(), 
+    legend.position="none", 
+    plot.title=element_text(hjust=0.5)) + 
+  labs(y="Sales", title="Top 4 Popular Genres in the USA")
+                        
+
+```
+
+To attract general customers, we should display new albums of the most popular genre. We should display the new album from Red Tone (Punk), Slim Jim Bites (Blues) and Meteor and the Girls (Pop), in that order. 
+
+# Who is the best/worst performing sales support agent? 
+
+To provide incentives to employees with good performance and provide support to struggling employees, we will analyze sales data associated with each employee. 
+
+First, we will calculate the total dollar amount of sales for each employee. Relevant tables for this analysis are:
+
+* employee: employees' personal information, years of experience and supervisor;
+* customer: customer information
+* invoice: total amount of purchase 
+
+```{sql connection=conn, output.var="employee"}
+
+SELECT e.employee_id, 
+        e.first_name || " " || e.last_name employee_name, 
+        e.title employee_title,
+        e.birthdate employee_birthdate,
+        e.hire_date,
+        e.country,
+        SUM(i.total) sales
+FROM employee e
+LEFT JOIN customer c ON e.employee_id = c.support_rep_id
+LEFT JOIN invoice i ON c.customer_id = i.customer_id
+GROUP BY employee_id
+ORDER BY sales DESC
+LIMIT 3;
+```
+
+```{r}
+# Visualize the result
+ggplot(employee, aes(x=reorder(employee_name, -sales), y=sales, fill=employee_name)) + 
+  geom_bar(stat="identity") + 
+  theme_tufte() + theme(
+    axis.title.x=element_blank(), 
+    legend.position="none", 
+    plot.title=element_text(hjust=0.5)) + 
+  labs(y="Sales", title="Performance of Sales Support Agent") + 
+  ylim(0, 2300)
+```
+
+Jane Peacock is the best performing sales agent. Her sales are 20% higher than the lowest sales performance. 
+
+Why is she showing better performance than others? Given that they started in the same year, their age difference may be playing a role. Jane, who is in the age group of people who are most economically active, may be promoting sales by understanding and responding to customer needs well. 
+
+```{r}
+e_table <- employee %>% mutate(start_year=year(hire_date), age = 2020-year(employee_birthdate)) %>%
+  select(employee_name, sales, start_year, age)
+
+e_table 
+```
+
+# Analze sales data for customers from different country
+
+
+
+
+
