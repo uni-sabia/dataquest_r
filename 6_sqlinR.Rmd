@@ -83,6 +83,12 @@ LIMIT 7;
 
 ```
 
+The query above gives us the following table: 
+
+```{r}
+popular_genre
+```
+
 We will visualize this data using ggplot 2. 
 
 ```{r}
@@ -130,6 +136,13 @@ ORDER BY sales DESC
 LIMIT 3;
 ```
 
+The query above gives us this table: 
+
+```{r}
+employee
+```
+
+
 ```{r}
 # Visualize the result
 ggplot(employee, aes(x=reorder(employee_name, -sales), y=sales, fill=employee_name)) + 
@@ -153,9 +166,70 @@ e_table <- employee %>% mutate(start_year=year(hire_date), age = 2020-year(emplo
 e_table 
 ```
 
-# Analze sales data for customers from different country
+# Sales by country
 
+First, we will collate data on purchases from different countries. We will include the following variables in our summary statistics: 
+* total number of customers
+* total value of sales
+* average value of sales per customer
+* average order value
 
+To calculate these values, we will need to join three tables: customer, invoice and invoice_line. We will use inner join, since we are only interested in the customers that exist in both tables. Note that Before we join the tables, we must prepare the original customer table first. We will treat countries that have only one customer as "Other" to make our statistics easier to understand. 
+
+The "new" table is saved as "new", which is then fed into the main query to get summary statistics. Note that the main query has a subquery that creates a new variable "sort" to bring "Other" group on the bottom of the table. The "sort" variable is not selected in the final table.
+
+```{sql connection = conn, output.var="sales_country"}
+
+WITH new AS 
+(SELECT c.customer_id,  
+       c.first_name || " " ||c.last_name customer_name,
+       il.*,
+CASE 
+    WHEN (
+          SELECT COUNT(customer_id) FROM customer WHERE c.country=country
+          ) = 1 THEN "Other"
+    ELSE c.country
+    END AS country
+FROM invoice i
+INNER JOIN customer c ON i.customer_id = c.customer_id
+INNER JOIN invoice_line il on i.invoice_id = il.invoice_id)
+
+SELECT country, customers, total_sales, avg_c_purchase, avg_order
+FROM (
+SELECT country,
+       COUNT(customer_id) customers,
+       SUM(unit_price) total_sales,
+       SUM(unit_price)/COUNT(DISTINCT customer_id) avg_c_purchase,
+       SUM(unit_price)/COUNT(DISTINCT invoice_id) avg_order,
+       CASE 
+          WHEN country = "Other" THEN 1
+          ELSE 0
+        END AS sort
+FROM new
+GROUP BY country
+ORDER BY sort ASC, total_sales DESC
+)
+
+```
+
+The query above gives us the following table.
+
+```{r}
+sales_country
+```
+
+Let us visualize this summary statistics using ggplot2. 
+
+```{r}
+sales_country$country <- factor(sales_country$country, levels = sales_country$country[order(-sales_country$customers)])
+ggplot(sales_country, aes(x=country, y=customers, fill=country)) + 
+  geom_bar(stat="identity") + 
+  theme_tufte() + theme(
+    axis.title.x=element_blank(), 
+    legend.position="none", 
+    plot.title=element_text(hjust=0.5)) + 
+  labs(y="Customers", title="Number of Customers by Country")
+```
 
 
 
