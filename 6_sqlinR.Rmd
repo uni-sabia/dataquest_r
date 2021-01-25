@@ -25,29 +25,9 @@ There are 11 tables in chinook database. The relationship between the tables are
 
 The datasets can be downloaded [here](https://www.sqlitetutorial.net/sqlite-sample-database/).
 
-To simplify codes for querying and managing connection to the database, we will create 2 helper functions.
-
-* run_query(): Connects with SQL database and saves the result in memory. Disconnect after fetching. 
-* show_tables(): Returns the list of all tables and views in the database. This is helpful for checking the status of the database as we work. 
-
 ```{r}
 db <- 'data/6_sqliteinR/chinook.db' # Local file path of the database
-conn <- dbConnect(SQLite(), db) 
-
-run_query <- function(query) {
-  conn <- dbConnect(SQLite(), db)
-  result <- dbGetQuery(conn, query) # send the query and return the result (dbSendQuery + dbFetch)
-  dbDisconnect(conn) 
-  return(result)
-}
-
-show_tables <- function(){
-  query <- "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view')"
-  return(run_query(query))
-}
-
-# What datasets do we have? 
-show_tables()
+conn <- dbConnect(SQLite(), db)  # Connect to the database
 ```
 
 # Which genres sell the best in the USA? 
@@ -55,10 +35,10 @@ show_tables()
 To understand which genres are the most popular in US store, we will calculate the *number of tracks sold in the USA and their share in total sales*. 
 
 To calculate this, we will write a series of queries that fetch the following variables. Then, we can group the resulting table by "Genre" to calculate total quantity and share.
-* Genre 
-* Track 
-* Quantity 
-* Location 
+- Genre 
+- Track 
+- Quantity 
+- Location 
 
 We will use a sql code chunk to build our table using SQL language. Each code chunk saves the result as an R object. 
 
@@ -244,20 +224,6 @@ ggplot(sales_country, aes(x=country, y=avg_c_purchase, fill=country)) +
   labs(y="Customers", title="Number of Customers by Country")
 ```
 
-# Track purchase vs. album purchase
-
-The company wants to know how many invoices were for whole albums and how many were for individual tracks. 
-
-To get this information from the tables we have, we will need to use the invoice_line, track and album tables.
-
-If the invoice was for the whole album, then the intersection of the set of tracks associated with an album and the set of tracks associated with an album would be NULL. In queries, this can be written as: 
-
-```{sql, connection=conn, output.var="invoice_album"}
-SELECT * 
-FROM invoice_line il
-INNER JOIN track t on il.track_id = t.track_id
-INNER JOIN album a on t.album_id = a.album_id
-```
 
 
 
