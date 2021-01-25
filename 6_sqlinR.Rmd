@@ -218,7 +218,7 @@ The query above gives us the following table.
 sales_country
 ```
 
-Let us visualize this summary statistics using ggplot2. 
+The following graphs show that the US is the biggest market. Meanwhile, it is worth noting that Czech Republic's average purchase per customer and average value per order is the highest of all. This implies that the Czech customer base has higher willingness to pay  than other markets. The company may benefit from investing in marketing activities in Czech republic, whose customer base is willing to pay more. In 
 
 ```{r}
 sales_country$country <- factor(sales_country$country, levels = sales_country$country[order(-sales_country$customers)])
@@ -227,9 +227,42 @@ ggplot(sales_country, aes(x=country, y=customers, fill=country)) +
   theme_tufte() + theme(
     axis.title.x=element_blank(), 
     legend.position="none", 
-    plot.title=element_text(hjust=0.5)) + 
+    plot.title=element_text(hjust=0.5),
+    axis.text.x = element_text(angle=45)) + 
   labs(y="Customers", title="Number of Customers by Country")
 ```
+
+```{r}
+sales_country$country <- factor(sales_country$country, levels = sales_country$country[order(-sales_country$customers)])
+ggplot(sales_country, aes(x=country, y=avg_c_purchase, fill=country)) + 
+  geom_bar(stat="identity") + 
+  theme_tufte() + theme(
+    axis.title.x=element_blank(), 
+    legend.position="none", 
+    plot.title=element_text(hjust=0.5),
+    axis.text.x = element_text(angle=45)) + 
+  labs(y="Customers", title="Number of Customers by Country")
+```
+
+# Track purchase vs. album purchase
+
+The company wants to know how many invoices were for whole albums and how many were for individual tracks. 
+
+To get this information from the tables we have, we will need to use the invoice_line, track and album tables.
+
+If the invoice was for the whole album, then the intersection of the set of tracks associated with an album and the set of tracks associated with an album would be NULL. In queries, this can be written as: 
+
+```{sql, connection=conn, output.var="invoice_album"}
+SELECT * 
+FROM invoice_line il
+INNER JOIN track t on il.track_id = t.track_id
+INNER JOIN album a on t.album_id = a.album_id
+```
+
+
+
+
+
 
 
 
