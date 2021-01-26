@@ -1,0 +1,82 @@
+---
+title: "Exploratory data analysis on Major League Baseball statistics"
+author: "Uni Lee"
+date: "1/26/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RSQLite)
+library(dplyr)
+library(tidyverse)
+library(readr)
+```
+
+The goal of this guided project is to create a normalized SQL database from a large dataset in R. 
+
+# Data
+
+We will work with data on Major League Baseball game statistics from 1800s-2000s, compiled by Retrosheet. This dataset is very large - There are 161 variables and 171,907 observations. The database shows details about the game: date, number of games, place, team, score, etc. 
+
+The defensive positions are coded in numbers. 
+* 1: Pitcher
+* 2: Catcher
+* 3: First baseman
+* 4: Second baseman
+* 5: Third baseman
+* 6: Shortstop
+* 7: Left fielder
+* 8: Center fielder
+* 9: Right fielder
+
+```{r}
+game_log_raw <- read.csv("data/7_baseball/game_log.csv")
+dim(game_log_raw) # 
+lapply(game_log_raw, class)[1:5] # Check the class of the first five columns
+
+# How are defensive positions coded?
+unique(game_log_raw$h_player_1_def_pos) # I don't know what 10 represents
+```
+
+Additionally, there are three helper tables provided by Retrosheet:
+
+```{r}
+park_codes <- read.csv("data/7_baseball/park_codes.csv")
+person_codes <- read.csv("data/7_baseball/person_codes.csv")
+team_codes <- read.csv("data/7_baseball/team_codes.csv")
+```
+The park_codes table gives you an information about the park in which the game took place. This table's primary key is park_id. This variable is also a foreign key for the game_log table.
+
+```{r}
+head(park_codes, 5)
+```
+The table "person_codes" tells you details about each player. The primary key of this table is id. This variable is connected to the game_log table with variables that use player's id as input. 
+
+```{r}
+head(person_codes, 5)
+```
+The team_codes table provides information about each team. Its primary key is team_id. This table is connected to the park_codes and game_log tables with "team_id" variable. The foreign key in game_log tables are v_name, v_league, h_name, h_league. 
+
+```{r}
+head(team_codes)
+```
+
+# Normalizing Tables
+
+To normalize tables, first we have to find a primary key for each table. The raw game_log table does not have one. We can construct one that identifies each game as unique following this rule provided by Restrosheet. 
+
+_id: Each game begins with a twelve character ID record which identifies the date, home team, and number of the game. For example, ATL198304080 should be read as follows. The first three characters identify the home team (the Braves). The next four are the year (1983). The next two are the month (April) using the standard numeric notation, 04, followed by the day (08). The last digit indicates if this is a single game (0), first game (1) or second game (2) if more than one game is played during a day, usually a double header. The id record starts the description of a game thus ending the description of the preceding game in the file._
+
+```{r}
+db <- "data/7_baseball/baseball.db"
+conn <- dbConnect(SQLite(), db)
+dbWriteTable(conn=conn, name="game_log", 
+                         value = game_log_raw,
+                         row.names=FALSE, header=TRUE)
+```
+```{sql, connection=conn}
+ALTER TABLE game_log
+ADD COLUMN game_id;
+
+```
