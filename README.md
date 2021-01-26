@@ -7,3 +7,4 @@ Guided projects
 4. Analyzing the relationship between perception of education quality and academic performance in NYC schools
 5. Analyzing country data from CIA Factbook (SQL in R)
 6. Analyzing music sales data (chinook SQL database in R)
+7. Normalizing Major League Baseball Database (SQL in R) 
