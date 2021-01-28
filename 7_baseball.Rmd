@@ -13,7 +13,16 @@ library(tidyverse)
 library(readr)
 ```
 
+<<<<<<< HEAD
+The goal of this guided project is to create a normalized SQL database from external data sets in R. Normalized database has a series of tables with a unique primary key that have at least one relation to another via "foreign key". "Normal" forms of data 1) reduces data redundancy and 2) improves data integrity. 
+There are many [levels of normalization](https://en.wikipedia.org/wiki/Database_normalization). Main aspects of normalized tables are:
+- There is a primary key, a unique value for each row;
+- No repeating groups (no column repetition); 
+- All columns should be related to teh primary key. Columns that are not related to the primary key should be placed in their own tables. 
+- Cells have single value.
+=======
 The goal of this guided project is to create a normalized SQL database from a large dataset in R. 
+>>>>>>> 83bd6752bd98678e58b15a640977e7dc95223188
 
 # Data
 
@@ -62,11 +71,21 @@ The team_codes table provides information about each team. Its primary key is te
 head(team_codes)
 ```
 
+<<<<<<< HEAD
+## Import tables to the database
+
+I have created a SQL database on terminal (or shell) using the following code. Note that there is no command for creating a new database because typing a non-existing database name and its file path will automatically create one.  
+
+> sqlite3. file_path/baseball.db
+
+There is no table yet in our database. So we will add tables in our SQL database from the csv files that we have saved in R objects.
+=======
 # Normalizing Tables
 
 To normalize tables, first we have to find a primary key for each table. The raw game_log table does not have one. We can construct one that identifies each game as unique following this rule provided by Restrosheet. 
 
 _id: Each game begins with a twelve character ID record which identifies the date, home team, and number of the game. For example, ATL198304080 should be read as follows. The first three characters identify the home team (the Braves). The next four are the year (1983). The next two are the month (April) using the standard numeric notation, 04, followed by the day (08). The last digit indicates if this is a single game (0), first game (1) or second game (2) if more than one game is played during a day, usually a double header. The id record starts the description of a game thus ending the description of the preceding game in the file._
+>>>>>>> 83bd6752bd98678e58b15a640977e7dc95223188
 
 ```{r}
 db <- "data/7_baseball/baseball.db"
@@ -74,9 +93,428 @@ conn <- dbConnect(SQLite(), db)
 dbWriteTable(conn=conn, name="game_log", 
                          value = game_log_raw,
                          row.names=FALSE, header=TRUE)
+<<<<<<< HEAD
+dbWriteTable(conn=conn, name="park_codes",
+             value=park_codes,
+             row.names=FALSE, header=TRUE)
+dbWriteTable(conn=conn, name="person_codes",
+             value=person_codes,
+             row.names=FALSE, header=TRUE)
+dbWriteTable(conn=conn, name="team_codes",
+             value=team_codes,
+             row.names=FALSE, header=TRUE)
+dbListTables(conn)
+
+```
+
+# Normalizing Tables
+
+## Step 1. Designate a primary key
+
+While all other helper files have a uniqute id, the there is no unique id for each game in the game_log table. We will construct one by following the rule provided by Retrosheet. 
+
+> Game ids have 12 characters that consist of: 
+ - First three: home team name (ABC)
+ - Next eight: year, month, day (yyyymmdd)
+ - Last digit:
+  >> 0 if single game,
+  >> 1 if first game,
+  >> 2 if second game. 
+
+First, we have to add a new column to the table. Specify the type of the column and that it is the primary key of this database. 
+
+```{sql, connection=conn}
+ALTER TABLE game_log
+ADD COLUMN game_id CHARACTER;
+```
+
+Next, we fill the column with values. The values are concatenated strings of three variables: h_game, date, number_of_game.
+
+```{sql, connection=conn, output.var="game_log"}
+UPDATE game_log
+SET game_id = (h_name || date || number_of_game);
+
+```
+
+# Step 2. Design a normalized schema
+
+In a normalized table, there should be *no repeated groups* and there should be *no repetition of data across tables*. 
+
+This means that each table should contain columns that are only relevant to the primary key. We can categorize columns in across all tables into the following and create separate tables for each category. 
+
+*Details of a specific game (game_log)
+*Team information (team)
+*League names associated with each id: values for this table need manual research (league)
+*Personal information about each player (player)
+*Location information about parks (park)
+*Team stats per game: Each game is listed twice for home and visiting teams. (team_stats)
+*Individual positions and stats per appearance: All non-primary key columns in this table are foreign keys. (person_stat)
+*Type of appearance: this table lists all types of appearance and designate a unique id for each position and category (defense, offense) (appearance_type)
+
+![Schema](data/7_baseball/schema.png)
+# Step 3. Create tables without foreign key relations
+
+The tables that do not depend on other tables are "player", "park", "league", and "appearance_type". For each table, we will create an empty table in the database and fill them with queries. 
+
+## player 
+
+1) Creating an empty table
+```{sql, connection=conn}
+CREATE TABLE IF NOT EXISTS player (
+player_id TEXT PRIMARY KEY,
+first_name TEXT,
+last_name TEXT);
+```
+
+2) Insert values from person_codes table
+
+```{sql, connection=conn}
+INSERT INTO player
+SELECT id AS player_id,
+       first AS first_name,
+       last AS last_name
+FROM person_codes;
+```
+
+```{sql, connection=conn}
+SELECT * 
+FROM player
+LIMIT 5;
+```
+
+## park
+
+1) Create an empty table
+
+```{sql, connection=conn}
+CREATE TABLE IF NOT EXISTS park (
+park_id TEXT PRIMARY KEY,
+name TEXT,
+nickname TEXT,
+city TEXT,
+state TEXT,
+notes TEXT);
+```
+
+2) Insert data from park_codes table 
+
+```{sql, connection=conn}
+INSERT INTO park 
+SELECT park_id,
+       name,
+       aka AS nickname,
+       city,
+       state,
+       notes
+FROM park_codes;
+```
+
+```{sql, connection=conn}
+SELECT * 
+FROM park
+LIMIT 5;
+```
+
+## league
+
+1) Create an empty table
+```{sql, connection=conn}
+CREATE TABLE IF NOT EXISTS league (
+league_id TEXT PRIMARY KEY,
+name TEXT
+);
+```
+
+2) Insert values manually, based on manual research results
+
+```{sql, connection=conn}
+INSERT INTO league 
+VALUES 
+      ("NL", "National League"),
+      ("AL", "American League"),
+      ("AA", "American Association"),
+      ("FL", "Federal League"),
+      ("PL", "Players League"),
+      ("UA", "Union Assocation")
+```
+
+```{sql, connection=conn}
+SELECT * FROM league
+```
+
+## appearance_type
+
+1) Create an empty table
+
+```{sql, connection=conn}
+CREATE TABLE IF NOT EXISTS appearance_type (
+appearance_type_id TEXT PRIMARY KEY,
+name TEXT,
+category TEXT
+)
+
+```
+
+2) Import data into the new table from an external file
+
+```{r}
+appearance_type_raw <- read.csv("data/7_baseball/appearance_type.csv")
+dbWriteTable(conn=conn, name="appearance_type_raw",
+             value=appearance_type_raw,
+             row.names=FALSE, header=TRUE)
+```
+
+3) Insert values from the imported data
+
+```{sql, connection=conn}
+INSERT INTO appearance_type
+SELECT * FROM appearance_type_raw
+```
+
+```{sql, connection=conn}
+SELECT * FROM appearance_type
+```
+
+## team
+
+1) Create an empty table. The "start", "end", "sequence" columns are dropped because they can be derived from the game_log table. 
+
+```{sql, connection=conn}
+CREATE TABLE IF NOT EXISTS team (
+team_id TEXT PRIMARY KEY,
+league_id TEXT,
+city TEXT,
+nickname TEXT,
+franch_id,
+FOREIGN KEY (league_id) REFERENCES league(league_id)
+);
+```
+
+2) Insert data from team_codes table. Use "[IGNORE INTO](https://sqlite.org/lang_conflict.html)" statement along with "INSERT" in order to skip rows that are not unique. 
+
+```{sql, connection=conn}
+INSERT OR IGNORE INTO team
+SELECT team_id,
+       league,
+       city,
+       nickname,
+       franch_id 
+FROM team_codes;
+```
+
+3) display
+
+```{sql, connection=conn}
+SELECT * FROM team
+LIMIT 5;
+```
+
+## game
+
+1) Create a new column "day" that indicates whether the game took place during the day or night. 
+
+```{sql, connection=conn}
+ALTER TABLE game_log
+ADD COLUMN day;
+```
+
+```{sql, connection=conn}
+INSERT INTO game_log (day) 
+SELECT 
+    CASE WHEN day_night="D" THEN "TRUE" ELSE "FALSE" END
+    FROM game_log;
+```
+
+
+1) Create an empty table
+
+```{sql, connection=conn}
+CREATE TABLE IF NOT EXISTS game (
+game_id TEXT PRIMARY KEY,
+date INTEGER,
+day TEXT,
+number_of_game INTEGER,
+park_id TEXT,
+length_outs INTEGER,
+length_minutes INTEGER,
+completion TEXT,
+forefeit TEXT,
+protest TEXT,
+attendance INTEGER,
+additional_info TEXT,
+acquisition_info TEXT,
+FOREIGN KEY (park_id) REFERENCES park(park_id)
+);
+```
+
+2) Insert data from game_log table
+
+```{sql, connection=conn}
+INSERT OR IGNORE INTO game 
+SELECT game_id, date, day, number_of_game, park_id,  length_outs, length_minutes, completion, forefeit, protest, attendance, additional_info, acquisition_info 
+FROM game_log;
+```
+
+```{sql, connection=conn}
+SELECT * FROM game LIMIT 5;
+```
+
+## team_stats
+
+The "team_stats" table needs special care because
+*it has a compound primary key (team_id + game_id);
+*it has three foreign key relations (team, league, game);
+*needs a new column that indicates whether it was a home team or visiting team. 
+
+1) Create an empty table
+
+```{sql, connection=conn}
+
+CREATE TABLE IF NOT EXISTS team_stats (
+             team_id TEXT,
+             game_id TEXT,
+             home TEXT,
+             league_id TEXT,
+             score INTEGER,
+             line_score INTEGER,
+             at_bats INTEGER,
+             hits INTEGER,
+             doubles INTEGER,
+             triples INTEGER,
+             homeruns INTEGER,
+             rbi INTEGER,
+             sacrifice_hits INTEGER,
+             sacrifice_flies INTEGER,
+             hit_by_pitch INTEGER,
+             walks INTEGER, 
+             intentional_walks INTEGER,
+             strikeouts INTEGER,
+             stolen_bases INTEGER,
+             caught_stealing INTEGER,
+             grounded_into_double INTEGER,
+             first_catcher_interference INTEGER,
+             left_on_base INTEGER,
+             pitchers_used INTEGER,
+             individual_earned_runs INTEGER,
+             team_earned_runs INTEGER,
+             wild_pitches INTEGER,
+             balks INTEGER,
+             putouts INTEGER,
+             assists INTEGER,
+             errors INTEGER,
+             passed_balls INTEGER,
+             double_playes INTEGER,
+             triple_plays INTEGER
+);
+
+```
+
+2) Insert data. 
+
+The following query creates two separate statistics tables for home and visiting teams. Then, the two tables are combined into one single table using UNION clause. 
+
+```{sql, connection = conn}
+INSERT OR IGNORE INTO team_stats
+      SELECT
+          h_name,
+          game_id,
+          1 AS home,
+          h_league,
+          h_score,
+          h_line_score,
+          h_at_bats,
+          h_hits,
+          h_doubles,
+          h_triples,
+          h_homeruns,
+          h_rbi,
+          h_sacrifice_hits,
+          h_sacrifice_flies,
+          h_hit_by_pitch,
+          h_walks,
+          h_intentional_walks,
+          h_strikeouts,
+          h_stolen_bases,
+          h_caught_stealing,
+          h_grounded_into_double,
+          h_first_catcher_interference,
+          h_left_on_base,
+          h_pitchers_used,
+          h_individual_earned_runs,
+          h_team_earned_runs,
+          h_wild_pitches,
+          h_balks,
+          h_putouts,
+          h_assists,
+          h_errors,
+          h_passed_balls,
+          h_double_plays,
+          h_triple_plays
+      FROM game_log
+  
+  UNION
+  
+      SELECT    
+          v_name,
+          game_id,
+          0 AS home,
+          v_league,
+          v_score,
+          v_line_score,
+          v_at_bats,
+          v_hits,
+          v_doubles,
+          v_triples,
+          v_homeruns,
+          v_rbi,
+          v_sacrifice_hits,
+          v_sacrifice_flies,
+          v_hit_by_pitch,
+          v_walks,
+          v_intentional_walks,
+          v_strikeouts,
+          v_stolen_bases,
+          v_caught_stealing,
+          v_grounded_into_double,
+          v_first_catcher_interference,
+          v_left_on_base,
+          v_pitchers_used,
+          v_individual_earned_runs,
+          v_team_earned_runs,
+          v_wild_pitches,
+          v_balks,
+          v_putouts,
+          v_assists,
+          v_errors,
+          v_passed_balls,
+          v_double_plays,
+          v_triple_plays
+      from game_log;
+```
+
+```{sql, connection=conn}
+SELECT * FROM team_stats
+```
+
+# Step 3. Drop original tables in the database. 
+
+```{sql, connection=conn}
+DROP TABLE game_log
+```
+```{sql, connection=conn}
+DROP TABLE park_codes
+```
+```{sql, connection=conn}
+DROP TABLE team_codes
+```
+```{sql, connection=conn}
+DROP TABLE person_codes
+```
+=======
 ```
 ```{sql, connection=conn}
 ALTER TABLE game_log
 ADD COLUMN game_id;
 
 ```
+>>>>>>> 83bd6752bd98678e58b15a640977e7dc95223188
