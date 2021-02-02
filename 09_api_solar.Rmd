@@ -65,11 +65,11 @@ result <- content(response, as="text") # Get content as text
 df <- jsonlite::fromJSON(result) # Turn it into a list
 ```
 
-The result of our query is a complex list. In this list, we subset the the 6th list, which contains information about the variables of our interest.
+The result of our query is a complex list. In this list, we subset the the 6th list, which contains information about the variables of our interest. Even after we subset the list, the result is still a nested list. We will have to turn them into vectors.
 
 ```{r}
 str(df) # Check which list we need to pull
-df_4175 <- df[[6]] 
+df_4175 <- df[6]
 
 str(df_4175) # Check the structure of the subsetted list
 ```
@@ -133,7 +133,7 @@ get_nrel <- function(endpoint, params){
 
   result <- content(response, as="text") # Get content as text
   df <- jsonlite::fromJSON(result) # Turn it into a list
-  df_1 <- df[[6]]
+  df_1 <- df[6]
   
   # Extract the lists as individual vectors
   avg_dni <- unlist(df_1$avg_dni$monthly)
