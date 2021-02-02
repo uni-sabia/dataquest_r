@@ -1,5 +1,5 @@
 ---
-title: "New York Solar Resource Data"
+title: "Extracting New York Solar Resource Data from NREL API"
 author: "Uni Lee"
 date: "2/2/2021"
 output: html_document
