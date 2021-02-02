@@ -1,0 +1,169 @@
+---
+title: "New York Solar Resource Data"
+author: "Uni Lee"
+date: "2/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(httr)
+library(dplyr)
+library(tidyverse)
+```
+
+# Extracting web data using API in R
+
+## Goal: extract solar resource data for New York City in JSON format and convert it into a dataframe
+
+[Data Gov API](https://developer.nrel.gov/docs/solar/solar-resource-v1/) provides data on solar resource in New York city. We will extract this data as a dataframe in R. 
+
+## Data
+
+The solar resource data provides the following information:
+
+*The Average Direct Normal Irradiance(avg_dni): Direct Normal Irradiance is the amount of solar radiation a surface receives per unit area.
+*The Average Tilt at Latitude (avg_lat_tilt): Tilt at Latitude is the amount of radiation a surface receives per unit area that doesn't arrive on a direct path from the sun.
+*The Average Global Horizontal Irradiance(avg_ghi): Global Horizontal Irradiance is the total amount of shortwave radiation a surface horizontal to the ground receives from above.
+
+All of the variables above are monthly averages.
+
+## Set parameters for this query
+
+The base url for this API is "https://developer.nrel.gov". Endpoints follow this format: "/api/solar/solar_resource/v1.format?parameters". We will use the json format.
+
+```{r}
+# URL
+base <- "https://developer.nrel.gov"
+endpoint <- "/api/solar/solar_resource/v1.json"
+```
+
+To access the database, one must sign up to get a token. I have stored my token in this variable, but I will hide it in the final publication of this document. 
+
+```{r}
+# My token
+api_key <- "token"
+
+# Other parameters
+lat <- 41 # Location info
+lon <- -75 
+
+# Save the parameters in a list
+params <- list(api_key=api_key, lat=lat, lon=lon)
+```
+
+## Query the API
+
+```{r}
+url <- modify_url(base, path=endpoint) # specify API url
+response <- GET(url, query=params) # query the API using the parameters 
+
+status_code(response) # Check if the query was successful
+http_type(response) # Is it the format we want? 
+
+result <- content(response, as="text") # Get content as text
+df <- jsonlite::fromJSON(result) # Turn it into a list
+```
+
+The result of our query is a complex list. In this list, we subset the the 6th list, which contains information about the variables of our interest.
+
+```{r}
+str(df) # Check which list we need to pull
+df_4175 <- df[[6]] 
+
+str(df_4175) # Check the structure of the subsetted list
+```
+
+Note that even after sub-setting, the result is still nested lists. Since we are only interested in monthly average for each variable (avg_dni, avg_ghi, avg_lat_tilt), we will extract the second list from each list. Then, we can combine them as a whole dataframe. 
+
+```{r}
+# Extract the lists as individual vectors
+avg_dni <- df_4175$avg_dni$monthly
+avg_ghi <- df_4175$avg_ghi$monthly
+avg_lat_tilt <- df_4175$avg_lat_tilt$monthly
+
+# Combine the vectors into a dataframe
+df_monthly <- tibble::tibble("month" = factor(month.abb, levels=month.abb),
+                             "avg_dni" = avg_dni,
+                            "avg_ghi" = avg_ghi,
+                            "avg_lat_tilt" = avg_lat_tilt)
+
+```
+
+## 3. Convert a complex list into a dataframe
+
+Consider the outputs list, named as an object "df". This is the raw results of our query. Note that this is a complex list of 6, some of which has nested lists of up to 3. We will simplify the outputs list using unlist() and matrix() functions. 
+
+```{r}
+str(df)
+```
+### Workflow: unlist() -> matrix() -> as.data.frame() 
+
+```{r}
+# 1. Simplify the list. The unlist() function removes all sub-hierarchies from the list and returns a simple vector.
+
+df_1 <- unlist(df)
+
+# 2. Restructure the vector into a matrix.
+df_2 <- matrix(df_1)
+
+# 3. Convert it into a dataframe
+df_3 <- as.data.frame(df_2)
+
+```
+
+## 4. Create a function that performs all of the commands above. 
+
+```{r}
+
+endpoint <- "/api/solar/solar_resource/v1.json"
+
+get_nrel <- function(endpoint, params){
+  base <- "https://developer.nrel.gov"
+
+  url <- modify_url(base, path=endpoint) # specify API url
+  response <- GET(url, query=params) # query the API using the parameters 
+
+  if (http_error(response)) {
+    stop("something went wrong", .call=FALSE)
+  }
+  if (http_type(response) != "application/json") {
+    stop("not json!", .call=FALSE)
+  }
+
+  result <- content(response, as="text") # Get content as text
+  df <- jsonlite::fromJSON(result) # Turn it into a list
+  df_1 <- df[[6]]
+  
+  # Extract the lists as individual vectors
+  avg_dni <- unlist(df_1$avg_dni$monthly)
+  avg_ghi <- unlist(df_1$avg_ghi$monthly)
+  avg_lat_tilt <- unlist(df_1$avg_lat_tilt$monthly)
+
+# Combine the vectors into a dataframe
+  df_monthly <- tibble::tibble("month" = factor(month.abb, levels=month.abb),
+                             "avg_dni" = avg_dni,
+                            "avg_ghi" = avg_ghi,
+                            "avg_lat_tilt" = avg_lat_tilt)
+  df_monthly
+  
+}
+
+# Set parameters
+params <- list(api_key=api_key, lat=lat, lon=lon)
+data <- get_nrel(endpoint, params)
+```
+
+
+## 5. Plot data 
+
+```{r}
+data_long <- data %>% pivot_longer(cols=c(avg_dni, avg_ghi, avg_lat_tilt), names_to = "category", values_to="value")
+
+ggplot(data_long, aes(x=month, y=value, group=category, color=category)) + geom_line() + geom_point() + theme_bw() + 
+  theme(legend.position="bottom") + 
+  labs(x="Month", y="Solar resource (kWh/m^2/day")
+
+```
+
+
