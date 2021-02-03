@@ -1,0 +1,130 @@
+---
+title: "Webscraping and analyzing movie rating data"
+author: "Uni Lee"
+date: "2/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rvest)
+library(dplyr)
+library(ggplot2)
+```
+
+# What are the top 30 movies between March and July 2020? 
+
+In this guided project, we will scrape details of top 30 movies of 2020 from [IMDB](https://www.imdb.com/). To avoid server instability, we will use this url provided by DataQuest: "http://dataquestio.github.io/web-scraping-pages/IMDb-DQgp.html".
+
+```{r}
+url <- "http://dataquestio.github.io/web-scraping-pages/IMDb-DQgp.html"
+
+# Load the web page content
+wp_content <- read_html(url)
+```
+
+## Extracting information using CCS selectors
+
+By inspecting the CCS elements in the source code or using the "[selector gadget](https://selectorgadget.com/)", we can identify which selector is necessary for each element. 
+
+### Movie titles
+
+```{r}
+selector <- ".lister-item-header a"
+titles <- wp_content %>% html_nodes(selector) %>% 
+  html_text()
+titles
+```
+
+### Years
+
+```{r}
+selector <- ".text-muted.unbold"
+years <- wp_content %>% html_nodes(selector) %>% html_text() %>%
+  readr::parse_number()
+length(years)
+```
+
+### User ratings
+
+```{r}
+selector <- ".ratings-imdb-rating strong"
+ratings <- wp_content %>% html_nodes(selector) %>%
+  html_text() %>% readr::parse_number()
+length(ratings) ## Movie 17 doesn't have ratings
+```
+
+### Metascores
+
+```{r}
+selector <- ".ratings-metascore"
+metascores <- wp_content %>% html_nodes(selector) %>% html_text() %>% readr::parse_number()
+length(metascores) 
+
+# Movies 2, 3, 4, 17, 29 don't have metascores
+
+```
+
+### Votes
+
+```{r}
+selector <- ".text-muted+ span"
+votes <- wp_content %>% html_nodes(selector) %>% 
+  html_text() %>% readr::parse_number()
+length(votes) # Movie 17 doesn't have votes info
+```
+
+## Combine extracted values as a dataframe
+
+### Introduce NA values for movies that don't have metascores. 
+
+```{r}
+# The following function provided by DataQuest adds NAs in a vector in positions we want
+
+append_vector <- function(vector, inserted_indices, values){
+
+  ## Creating the current indices of the vector
+  vector_current_indices <- 1:length(vector)
+
+  ## Adding small amount of values (between 0 and 0.9) to the `inserted_indices`
+  new_inserted_indices <- inserted_indices + seq(0, 0.9, length.out = length(inserted_indices))
+
+  ## Appending the `new_inserted_indices` to the current vector indices
+  indices <- c(vector_current_indices, new_inserted_indices)
+
+  ## Ordering the indices
+  ordered_indices <- order(indices)
+
+  ## Appending the new value to the existing vector
+  new_vector <- c(vector, values)
+
+  ## Ordering the new vector wrt the ordered indices
+  new_vector[ordered_indices]
+}
+
+# Apply the function to vectors that have missing values
+
+full_rating <- append_vector(ratings, 16, NA)
+full_metascore <- append_vector(metascores, c(1, 2, 3, 16, 28), NA)
+full_vote <- append_vector(votes, 16, NA)
+
+# Put them altogether
+movie <- data.frame(titles, years, full_rating, full_metascore, full_vote) %>% filter(titles != "A Quiet Place Part II")
+head(movie)
+
+```
+
+
+# Are ratings correlated with user votes? 
+
+To measure the correlation between ratings and user votes, we can draw a boxplot of user votes by rating. For this purpose, we will round the ratings value and treat them as factors. 
+
+```{r}
+movie$rating <- as.factor(floor(movie$full_rating))
+
+ggplot(movie, aes(x=rating, y=full_vote)) + geom_boxplot() + labs(x="Rating", y='User Votes') + theme_minimal()
+
+```
+
+The box plot revealed that the lowest rating received the least user votes and the highest rating received the most user votes. The variance of user votes is the highest for rating 6. 
+
