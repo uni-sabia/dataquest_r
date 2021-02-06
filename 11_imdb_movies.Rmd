@@ -127,4 +127,3 @@ ggplot(movie, aes(x=rating, y=full_vote)) + geom_boxplot() + labs(x="Rating", y=
 ```
 
 The box plot revealed that the lowest rating received the least user votes and the highest rating received the most user votes. The variance of user votes is the highest for rating 6. 
-
