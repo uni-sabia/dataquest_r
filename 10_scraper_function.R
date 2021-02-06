@@ -2,10 +2,7 @@ library(dplyr)
 library(rvest) #for websraping
 library(janitor) #for clean datasets
 library(ggplot2) # for data visualization
-<<<<<<< HEAD
 library(stringr) # for extracting text
-=======
->>>>>>> 896c097978b7e656dd890fcf7f6cc98af8793977
 
 # Mission. Write a function that allows us to scrape websites.
 
@@ -88,7 +85,6 @@ worldpop_subset <- worldpop_df %>% filter(year > 1950 & year < 2019)
 ## Visualize the dataset
 ggplot(worldpop_subset, aes(x=year, y=yearly_change)) + 
          geom_line() + geom_point() + theme_classic()
-<<<<<<< HEAD
 
 # Test drive 5. Build an image dataset from Billboard Hot 100 
 ## https://www.billboard.com/charts/hot-100
@@ -102,6 +98,4 @@ image <- scraper(url, selector, output)[1:5]
 ### This is the regex that can be used to extract URLs of images
 url_pattern <- "(?i)http[s]?://(?:[a-z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-f][0-9a-f]))+\\.jpg"
 image_list <- str_match(image, url_pattern)[,1]
-=======
-       
->>>>>>> 896c097978b7e656dd890fcf7f6cc98af8793977
+
