@@ -1,8 +1,10 @@
 ---
-title: "How skewed is Fandango.com's Movie rating?"
+title: "Has Fandango.com fixed the 'bug' in its rating system?"
 author: "Uni Lee"
 date: "2/12/2021"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -11,17 +13,19 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(ggplot2)
 library(stringr)
+library(gt)
+library(tinytex)
+library(tidyverse)
 ```
 
-# Are movie ratings on Fandango.com still inflated? 
-
-The goal of this guided project is to compare Fandango.com's movie ratings in 2015 to those in 2016 to determine if there has been any change. 
 
 In 2015, an investigation by a data jounralist named Walt Hicky from [FiveThirtyEight](https://fivethirtyeight.com/features/fandango-movies-ratings/) revealved that the movie ratings on Fandango is significantly more left-skewed than those of the competitors. After the report was released, Fandango.com announced that it was caused by a bug in the system and that they will fix it shortly. Have they fixed the bug? If they have not, we can assume that the left-skewedness of movie ratings was intentional. 
 
+To answer the research question, we will compare Fandango.com's movie ratings in 2015 to those in 2016 to determine if there has been any change. 
+
 # Data
 
-To answer the research question, we will compare the frequency distributions of Fandango's movie ratings in 2015 to those in 2016. Walt Hicky has made the data available on [Github](https://github.com/fivethirtyeight/data/tree/master/fandango). The 2016 data has also been made available on [Github](https://github.com/mircealex/Movie_ratings_2016_17) thanks to the Dataquest team. 
+Walt Hicky has made the data available on [Github](https://github.com/fivethirtyeight/data/tree/master/fandango). The 2016 data has also been made available on [Github](https://github.com/mircealex/Movie_ratings_2016_17) thanks to the Dataquest team. 
 
 ```{r}
 # Read in data from the repositories
@@ -32,15 +36,15 @@ f_2016_raw <- read.csv("data/12_fandango/movie_ratings_16_17.csv", sep=";")
 f_2015 <- f_2015_raw %>% select(FILM, starts_with("Fandango"))
 f_2016 <- f_2016_raw %>% select(movie, year, fandango)
 
-head(f_2015_raw)
-head(f_2016_raw)
+head(f_2015)
+head(f_2016)
 ```
 
-## Sampling errors
+## Sampling error
 
-To draw general conclusions about the population (all movies that have been rated by Fandango), we would randomly select samples from the population. Since we are comparing the ratings in 2015 to 2016, we need two datasets that consist of randomly selected samples in 2015 and 2016. 
+To draw general conclusions about the population (all movies that have been rated by Fandango), we have to *randomly select* samples from the population. Since we are comparing the ratings in 2015 to 2016, we need two datasets that consist of randomly selected samples of movies released in 2015 and 2016. 
 
-However, the datasets we have are not randomly selected samples of the population. The datasets were selected purposefully according to criteria that the data collectors used for the purpose of their analysis. This puts us at the risk of introducing large sampling errors. 
+However, the datasets we have are not randomly selected samples of the population. The datasets were selected purposefully according to criteria that the data collectors used for the purpose of their analysis. This puts us at the risk of introducing large sampling error. 
 
 In order to overcome the limitation of the datasets in our hands, we have to come up with a proxy goal for this analysis. Instead of comparing all movies on Fandango, we will compare ratings of popular movies in 2015 to those of popular movies in 2016. 
 
@@ -84,7 +88,7 @@ sample_n(only_2016, size=10)
 
 When I went to Fandango.com to check the votes of the randomly selected movies, I noticed that Fandango no longer uses 5-star rating system. Instead, it uses Audience Scores verified by Rotten Tomatoes. 
 
-* Audience Score: The percentage of users who made a verified movie ticket purchase and rated this 3.5 stars or higher.
+> Audience Score: The percentage of users who made a verified movie ticket purchase and rated this 3.5 stars or higher.
 
 To check movies' popularity, we can use the number of reviews on Rotten Tomatoes. However, this would still be imperfect because we don't know how comparable the size of reviewers on Fandango is to that of Rotten Tomatoes. In addition, the number of reviews must have increased since the release date (2016) over time. 
 
@@ -92,7 +96,9 @@ Despite the limitations, we can conclude that the second dataset represents popu
 
 # Analysis
 
-For our analysis, we will draw two kernel density plots of movie ratings in 2015 and 2016.
+## Overview of distribution: Kernel density plots 
+
+For a general assessment, we will draw two kernel density plots of movie ratings in 2015 and 2016.
 
 ```{r}
 # Combine two datasets into one table
@@ -109,11 +115,115 @@ ggplot(ratings_full, aes(x=fandango, color=year)) +
   xlim(0,5) + 
     theme_classic() +
   theme(plot.title=element_text(hjust=0.5)) +
-  scale_color_manual(values=c("red", "blue")) +
-  geom_vline(xintercept=mean(only_2015_2$fandango), linetype="dashed", color="red") +
-  geom_vline(xintercept=mean(only_2016$fandango), linetype="dashed", color="blue")
+  scale_color_manual(values=c("blue", "red")) +
+  geom_vline(xintercept=mean(only_2015_2$fandango), linetype="dashed", color="blue") +
+  geom_vline(xintercept=mean(only_2016$fandango), linetype="dashed", color="red")
 
 ```
 
 In this graph, we can observe that the mean rating decreased in 2016. There are less frequencies for ratings above 4.5. However, the ratings are still heavily left-skewed. 
 
+## Frequency distribution tables
+
+For a more granular assessment, we will create frequency tables for each sample. 
+
+```{r}
+# Create absolute and relative frequency distributions for each year
+freq_2015 <- only_2015_2 %>% group_by(fandango) %>% summarise(Freq=n()) %>% mutate(freq_pc_2015=round(Freq/nrow(only_2015_2)*100,2)) 
+
+## Since the 2015 does not have any 2.5 ratings, we will add that information to the table.
+missing_rating <- c(2.5, 0, 0)
+freq_2015 <- rbind(freq_2015, missing_rating) %>% arrange(fandango)
+
+freq_2016 <- only_2016 %>%  group_by(fandango) %>% summarise(Freq=n()) %>% mutate(freq_pc_2016=round(Freq/nrow(only_2016)*100,2)) 
+
+# Put them into a table for comparison
+rating <- unique(ratings_full$fandango) %>% sort()
+freq_pc_2015 <- freq_2015$freq_pc_2015
+freq_pc_2016 <- freq_2016$freq_pc_2016
+
+freq_table <- tibble(rating, freq_pc_2015, freq_pc_2016)
+
+# Make the table look pretty
+gt(freq_table) %>% 
+  tab_header(
+    title= "Frequncy distribution of ratings in 2015 and 2016"
+  ) %>% 
+  cols_label(rating="Rating", freq_pc_2015="2015 (%)", freq_pc_2016="2016(%)") %>%
+  cols_align("center")
+
+```
+
+In comparison to 2015, the distribution of ratings in 2016 were more spread across ratings. The most frequent ratings was 4.0, half a star down from 2015. 
+
+## Sample Statistics (mean, median, mode)
+
+Although the frequency table was useful, sample statistics may help us get a more accurate sense of the data. 
+
+```{r}
+# Since R does not have a built-in function for calculating modes, we will use a custom function. 
+mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x,ux)))]
+}
+
+statistics <- ratings_full %>% group_by(year) %>% summarise(
+  mean=mean(fandango),
+  median=median(fandango),
+  mode=mode(fandango))
+
+# Visualize the table 
+## Prepare the table for graphing
+statistics_long <- statistics %>% pivot_longer(cols=mean:mode, names_to="statistics", values_to="value")
+
+## Graph
+ggplot(statistics_long, aes(x=statistics, y=value, fill=year)) + 
+  geom_bar(stat="identity", position="dodge", alpha=0.85) + 
+  theme_classic() +
+  labs(title="Summary statistics of fandango movie ratings 2015-2016",
+       y="Rating in Stars") + 
+  theme(axis.title.x=element_blank()) +
+  scale_fill_manual(values=c("blue", "red")) 
+```
+From the summary statistics, we can see that the mean ratings decreased by 0.2 starts and the mode decreased by 0.5. However, the median remains the same. 
+
+# How does the 2016 ratings compare to other rating sites?
+
+How significant are the changes in movie ratings on Fandango.com? To answer this question, we will revisit the full dataset provided for 2016. This dataset provides ratings of other websites that have been normalized to a 0-5 scale to enable meaningful comparison. 
+
+```{r}
+# Select movies released in 2016 and relevant variables
+rating_2016 <- f_2016_raw %>% filter(year==2016) %>% 
+  select(movie, year, fandango, nr_metascore, nr_imdb, nr_tmeter, nr_audience)
+
+# Prepare the table for graphing
+rating_2016_long <- rating_2016 %>% pivot_longer(fandango:nr_audience, names_to="company", values_to="rating")
+
+comparison<-ggplot(rating_2016_long, aes(x=rating, fill=company, color=company)) +
+  geom_density(stat="density", alpha=0.3) +
+  scale_fill_manual(name="Company", values=c("red", "blue", "yellow", "purple", "grey")) + 
+  scale_color_manual(values=c("red", "blue", "yellow", "purple", "grey")) + 
+  theme_minimal() + 
+  labs(title="Comparison to Fandango.com's competitors",
+       subtitle="Normalized ratings distribution of
+191 popular movies released in 2016", 
+x= "Rating in Stars", y="Density") +
+  theme(legend.position="none")
+
+# Prepare company labels for each company
+company <- unique(rating_2016_long$company)
+label <- c("Fandango", "Metacritic", "IMDB", "Tomatometer", "Rotten Tomatoes User")
+x_pos <- c(4, 2, 2.75, 0.5, 1.5)
+y_pos <- c(1.05, 0.4, 1.2, 0.2, 0.25)
+
+label_tb <- tibble(company, x_pos, y_pos, label)
+
+# Add company labels to the graph
+comparison +
+  geom_text(data=label_tb, x=x_pos, y=y_pos, label=label)
+
+```
+
+# Conclusion
+
+Our analysis show that Fandango.com has indeed fixed the "bug" in its system, albeit to a limited extent. The average movie ratings decreased by 0.2. The decrease in average is likely due to the fact that many movies that were rated as 4.5 were rounded down to 4.0. Despite the change that Fandango has made, its ratings were still inflated in comparison to other websites in 2016.  
