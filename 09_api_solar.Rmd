@@ -41,8 +41,8 @@ endpoint <- "/api/solar/solar_resource/v1.json"
 To access the database, one must sign up to get a token. I have stored my token in this variable, but I will hide it in the final publication of this document. 
 
 ```{r}
-# My token
-api_key <- "token"
+# My tokens
+api_key <- "jwafiqJgbzBnHwhGEmOF6YqRd0ERTXDeCU23a4UX"
 
 # Other parameters
 lat <- 41 # Location info
@@ -133,7 +133,7 @@ get_nrel <- function(endpoint, params){
 
   result <- content(response, as="text") # Get content as text
   df <- jsonlite::fromJSON(result) # Turn it into a list
-  df_1 <- df[6]
+  df_1 <- df[[6]]
   
   # Extract the lists as individual vectors
   avg_dni <- unlist(df_1$avg_dni$monthly)
@@ -151,14 +151,14 @@ get_nrel <- function(endpoint, params){
 
 # Set parameters
 params <- list(api_key=api_key, lat=lat, lon=lon)
-data <- get_nrel(endpoint, params)
+solar <- get_nrel(endpoint, params)
 ```
 
 
 ## 5. Plot data 
 
 ```{r}
-data_long <- data %>% pivot_longer(cols=c(avg_dni, avg_ghi, avg_lat_tilt), names_to = "category", values_to="value")
+data_long <- solar %>% pivot_longer(cols=c(avg_dni, avg_ghi, avg_lat_tilt), names_to = "category", values_to="value")
 
 ggplot(data_long, aes(x=month, y=value, group=category, color=category)) + geom_line() + geom_point() + theme_bw() + 
   theme(legend.position="bottom") + 

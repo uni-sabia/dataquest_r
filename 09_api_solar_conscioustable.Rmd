@@ -1,0 +1,180 @@
+---
+title: "How much solar resource does the White House have?"
+author: "Uni Lee"
+date: "2/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(httr)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(ggthemes)
+```
+
+In 2014, President Barack Obama (re-)installed solar panels on the White House. The generation capacity of the panels are quite small at 16kW, producing 19,700kWh per year (for comparison, [the average US household consumes about 11,000 kWh per year](https://www.eia.gov/energyexplained/use-of-energy/electricity-use-in-homes.php).)  However small, the installation sent a political signal that the Obama administration was committed to advancing the clean energy agenda in the US.
+
+> "By installing solar panels on arguably the most famous house in the country, his residence, the president is underscoring that commitment to lead and the promise and importance of renewable energy in the United States." - _Nancy Sutley, chairwoman of the White House Council on Environmental Quality_
+
+Aside from the political effect of the installation, I was curious to know whether the White House was a good place for installing solar. We will answer this question by extracting the solar resource data using API in R.
+
+
+# How much solar resource does the White House have? 
+
+## Data
+
+[The National Renewable Energy Laboratory's developer network](https://developer.nrel.gov/docs/solar/solar-resource-v1/) provides data on solar resources in the US. We will extract this data as a data frame in R and plot monthly solar resources at the White House.
+
+The solar resource data provides the following information:
+
+- The Average Direct Normal Irradiance (avg_dni): Direct Normal Irradiance is the amount of solar radiation a surface receives per unit area.
+- The Average Tilt at Latitude (avg_lat_tilt): Tilt at Latitude is the amount of radiation a surface receives per unit area that doesn't arrive on a direct path from the sun.
+- The Average Global Horizontal Irradiance(avg_ghi): Global Horizontal Irradiance is the total amount of shortwave radiation a surface horizontal to the ground receives from above.
+
+### Set parameters for this query
+
+The base URL for this API is “https://developer.nrel.gov”. Endpoints follow this format: “/api/solar/solar_resource/v1.format?parameters”. We will use the json format.
+
+
+```{r}
+# URL
+base <- "https://developer.nrel.gov"
+endpoint <- "/api/solar/solar_resource/v1.json"
+```
+
+To access the database, one must sign up to get a token. I have stored my token in the api_key variable, but I will hide it in the final publication of this document.
+
+
+```{r}
+# My tokens
+api_key <- "jwafiqJgbzBnHwhGEmOF6YqRd0ERTXDeCU23a4UX"
+
+# Latitude and Longitude of the White House
+lat <- 38.8976763 
+lon <- -77.0365298 
+
+# Save the parameters in a list
+params <- list(api_key=api_key, lat=lat, lon=lon)
+```
+
+### Query the API
+
+```{r}
+url <- modify_url(base, path=endpoint) # specify API url
+response <- GET(url, query=params) # query the API using the parameters 
+
+status_code(response) # Check if the query was successful
+http_type(response) # Is it the format we want? 
+
+result <- content(response, as="text") # Get content as text
+df <- jsonlite::fromJSON(result) # Turn it into a list
+```
+
+The result of our query is a complex list. In this list, we subset the the 6th list, which contains information about the variables of our interest. Even after we subset the list, the result is still a nested list. We will have to turn them into vectors.
+
+```{r}
+str(df) # Check which list we need to pull
+df_whitehouse <- df[[6]]
+
+```
+
+Note that even after sub-setting, the result is still nested lists. Since we are only interested in monthly average for each variable (avg_dni, avg_ghi, avg_lat_tilt), we will extract the second list from each list. Then, we can combine them as a whole dataframe. 
+
+```{r}
+# Extract the lists as individual vectors
+avg_dni <- unlist(df_whitehouse$avg_dni$monthly)
+avg_ghi <- unlist(df_whitehouse$avg_ghi$monthly)
+avg_lat_tilt <- unlist(df_whitehouse$avg_lat_tilt$monthly)
+
+# Combine the vectors into a dataframe
+white_house <- tibble::tibble("month" = factor(month.abb, levels=month.abb),
+                             "avg_dni" = avg_dni,
+                            "avg_ghi" = avg_ghi,
+                            "avg_lat_tilt" = avg_lat_tilt)
+
+```
+
+The following function, "get_nrel()", performs all of the steps above at once. You can use this function to get solar resource data for any location in the US. 
+
+```{r}
+
+get_nrel <- function(endpoint, params){
+  base <- "https://developer.nrel.gov"
+
+  url <- modify_url(base, path=endpoint) # specify API url
+  response <- GET(url, query=params) # query the API using the parameters 
+
+  if (http_error(response)) {
+    stop("something went wrong", .call=FALSE)
+  }
+  if (http_type(response) != "application/json") {
+    stop("not json!", .call=FALSE)
+  }
+
+  result <- content(response, as="text") # Get content as text
+  df <- jsonlite::fromJSON(result) # Turn it into a list
+  df_1 <- df[[6]]
+  
+  # Extract the lists as individual vectors
+  avg_dni <- unlist(df_1$avg_dni$monthly)
+  avg_ghi <- unlist(df_1$avg_ghi$monthly)
+  avg_lat_tilt <- unlist(df_1$avg_lat_tilt$monthly)
+
+# Combine the vectors into a dataframe
+  df_monthly <- tibble::tibble("month" = factor(month.abb, levels=month.abb),
+                             "avg_dni" = avg_dni,
+                            "avg_ghi" = avg_ghi,
+                            "avg_lat_tilt" = avg_lat_tilt)
+  df_monthly
+  
+}
+```
+
+We will use this function to generate another solar resource dataset for [Adams County solar farm](https://www.seattletimes.com/nation-world/harvesting-the-sun-washington-states-largest-solar-farm-nears-production/#:~:text=LIND%2C%20Adams%20County%20%E2%80%94%20Washington's%20largest,mirage%20on%20the%20dusty%20landscape.), which is the largest solar farm in Washington. This dataset will be used to draw comparions between the two locations. 
+
+```{r}
+# Set parameters
+endpoint <- "/api/solar/solar_resource/v1.json"
+params <- list(api_key=api_key, lat=46.972564, lon=-118.616346)
+lind <- get_nrel(endpoint, params)
+```
+
+
+## Monthly Solar Resource at the White House vs. Lind Solar Farm
+
+
+```{r}
+# Prepare data for graphing
+white_house_long <- white_house %>% pivot_longer(cols=c(avg_dni, avg_ghi, avg_lat_tilt), names_to = "type", values_to="value") %>% mutate(location="White House")
+
+lind_long <- lind %>% pivot_longer(cols=c(avg_dni, avg_ghi, avg_lat_tilt), names_to = "type", values_to="value") %>% mutate(location = "Lind, Adams County")
+
+# Create plots
+white_house_plot <- ggplot(white_house_long, aes(x=month, y=value, group=type, color=type)) + 
+  geom_line() + geom_point() + theme_bw() + 
+  labs(y="Solar resource (kwh/m^2/day)",
+       title="White House") + 
+  theme(legend.position="none",
+        axis.title.x=element_blank(),
+        plot.title=element_text(hjust=0.5)) +
+  ylim(0,9)
+
+lind_plot <- ggplot(lind_long, aes(x=month, y=value, group=type, color=type)) + 
+  geom_line() + geom_point() + theme_bw() + 
+  labs(title="Lind Solar Farm") + 
+  theme(legend.position="none",
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        plot.title=element_text(hjust=0.5)) +
+  ylim(0,9)
+
+# Put two graphs in one page
+ggarrange(white_house_plot, lind_plot, common.legend = TRUE, legend="bottom")
+```
+
+The graph above shows us that potential solar energy is more abundant at Lind Solar Farm. Despite the relatively smaller solar resource potential, the solar panels at the White House have an important role to play: sending a strong political message that the administration is committed to pushing the clean energy agenda forward.
+
+Luckily, the solar panels survived the Trump administration. Now that the “Clean Energy Revolution” is back on the US policy agenda with Joe Biden in office, the reputation of these solar panels can expect an upgrade from a contested political statement to a symbol of a sustainable economic powerhouse.
