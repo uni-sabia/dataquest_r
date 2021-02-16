@@ -8,4 +8,8 @@ Guided projects
 5. Analyzing country data from CIA Factbook (SQL in R)
 6. Analyzing music sales data (chinook SQL database in R)
 7. Normalizing Major League Baseball Database (SQL in R) 
-8. Extracting New York Solar Resource Data from NREL API (https://developer.nrel.gov/docs/solar/solar-resource-v1/)
+8. Extracting datasets from multiple API sources (Trefle, Climate Data API)
+9. Extracting New York Solar Resource Data from NREL API (https://developer.nrel.gov/docs/solar/solar-resource-v1/) 
+10. A custom function for webscraping
+11. Websraping and analyzing movie ratings data on IMDb
+12. "Has Fandango.com fixed the 'bug' in its rating system?" - Frequency distribution
