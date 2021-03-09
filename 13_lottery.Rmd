@@ -1,0 +1,133 @@
+---
+title: "What is my chance of winning the lottery?"
+output: html_document
+author: Uni Lee
+date: 09/03/2021
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(purrr)
+library(dplyr)
+```
+
+# Writing a function that calculates probability of winning a lottery
+
+The goal of this project is to build functions that calculate probabilities of winning lotteries. This calculation will be used to build an app that informs lottery addicts of how small the chance of winning is. The first version of the app focuses on 6/49 lottery. 
+
+In a 6/49 lottery, six numbers are drawn from a set of 49_ without replacement_. If a ticket matches all six numbers, the jackpot size of at least 5,000,000 dollars is won. A bonus number is also drawn, and if a player's ticket matches five numbers and the bonus number, the player wins the "second prize" which is usually between $100,000-500,000. 
+
+The app developers want to let the users choose the number of tickets and wins when calculating probabilities of winning. Thus, users of this app can answer questions like the following.
+
+- What is the probability of winning the big prize with a single ticket?
+- What is the probability of winning the big prize if we play 40 different tickets (or any other number)?
+- What is the probability of having at least five (or four, or three, or two) winning numbers on a single ticket?
+
+# Calculation tools for factorials, combinations
+
+Since we will be computing probabilities, we will wrtie functions that calculate factorials and combinations.
+
+```{r}
+# Factorial function
+factorial <- function(n){
+  product = 1
+  for (i in 1:n) {
+    product = product*i
+  }
+  return(product)
+}
+
+# Combination function
+combination <- function(n,k){
+  return(factorial(n)/(factorial(n-k)*factorial(k)))  
+}
+
+```
+
+# Calculate probabilities
+
+Users of the app will draw 6 numbers from 1 to 49. Their choice will come as a vector of 6 numbers, serving as the input for our function. The function uses the number of strings in the vector (6) and calculates the number of total unique combinations of the number. This is obtained by using the combination function we wrote above. Then, the probability of winning is calculated by dividing 1 by the number of combinations. 
+
+```{r}
+options(scipen=999)
+one_ticket_probability <- function(vector){
+  num <- length(vector)
+  combination <- combination(49, num)
+  probability <- 1/combination
+  
+  
+  print(paste("The chance of winning the lottery on your ticket is ", round(probability*100,7), "%."))
+}
+
+one_ticket_probability(c(1,2,3,4,5,6))
+```
+
+
+# Comparison with historical data 
+
+Users can compare their ticket against past winning combinations in the historical lottery data in Canada (1982-2018) and determine whether they would have ever one. The dataset can be downloaded [here](https://www.kaggle.com/datascienceai/lottery-dataset). 
+
+```{r}
+raw <- read.csv("data/13_lottery.csv")
+nrow(raw) # There are 3665 drawings 
+ncol(raw)
+head(raw,3)
+```
+
+The following function enables this feature by printing the following results:
+
+- the number of times the combination selected occurred in the Canada data set, and
+- the probability of winning the big prize in the next drawing with that combination.
+
+```{r}
+# Using pmap function, take 6 "number drawn" columns as a list and then turn them into vectors.
+draw <- pmap(
+  list(
+    a <- raw$NUMBER.DRAWN.1,
+    b <- raw$NUMBER.DRAWN.2,
+    c <- raw$NUMBER.DRAWN.3,
+    d <- raw$NUMBER.DRAWN.4,
+    e <- raw$NUMBER.DRAWN.5,
+    f <- raw$NUMBER.DRAWN.6
+  ),
+  .f <- function(a,b,c,d,e,f){c(a,b,c,d,e,f)}
+)
+
+# Write a function that takes in an R vector of the user's choice and the list containing the sets of the winning numbers 
+
+check_historical_occurence <- function(vector) {
+  # Has the user's choice ever been picked?
+  historical_matches <- map(draw, function(x) {setequal(x,vector)})
+  # How many times?
+  num_hist <- sum(unlist(historical_matches))
+  # Print message
+  s <- paste("Your choice of numbers has appeared ",
+             num_hist,
+             "times in the past.",
+             "Your chance of winning the big prize in the next drawing is 0.000072 %.")
+  print(s)
+  }
+
+check_historical_occurence(c(3,12,23,33,41,22))
+check_historical_occurence(c(3,11,12,14,41,43))
+```
+
+Even if the lottery player does not get all six numbers right, s/he can win the bet by getting 3, 4, 5, or 6 numbers right. What are the probabilities of winning then? 
+
+In this case, the combination of the ticket is irrelevant. The probability of winning a particular set of numbers has already been calculated. The number of choices that the player would want to get right is the only information necessary to calculate the probability of winning. 
+
+```{r}
+probability_less_6 <- function(n){
+  outcomes <- combination(6,n)
+  total_outcome <- combination(49,n)
+  prob <-  round(outcomes/total_outcome*100, 7)
+  message<- paste("The chance of getting ", n, " numbers right is ", prob, "%.")
+  print(message)
+  }
+probability_less_6(3)
+probability_less_6(4)
+probability_less_6(5)
+```
+
+The function calculates the number of combinations of choosing n numbers from a set of 6 numbers. By dividing it by the number of total outcomes of drawing 6 numbers from 1-49 without replacement, the probability of winning is calculated for n.
+
