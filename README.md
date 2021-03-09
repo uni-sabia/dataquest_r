@@ -14,3 +14,4 @@ Guided projects
 11. Websraping and analyzing movie ratings data on IMDb
 12. "Has Fandango.com fixed the 'bug' in its rating system?" - Frequency distribution
 test
+13. What are my change of winning the lottery? - Permutations and Combinations
