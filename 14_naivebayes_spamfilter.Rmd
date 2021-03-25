@@ -1,0 +1,145 @@
+---
+title: "Building a spam filter with naive Bayes Algorithm"
+author: "Uni Lee"
+date: "3/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(dplyr)
+library(stringr)
+
+```
+
+In this guided project, we will build a spam filter with naive Bayes algorithm. Conditional probabilities of a message being a spam or non-spam will be calculated based on a dataset of 5,572 SMS messages provided by [the UCI Machine Learning Repository](https://archive.ics.uci.edu/ml/datasets/sms+spam+collection). The final product will be an algorithm that classsifies messages as spam or non-spam based on these probabilities. The goal of this project is to maximize the predictive ability of the algorithm.
+
+# Data
+
+The spam message dataset consists of 5,572 messages. Each message is classified into spam or non-spam category. 13% of the messages in this dataset is classified as spam and 87% as non-spam (labeld as "ham"). 
+
+```{r warning=FALSE}
+spam <- read.csv("data/14_spam.csv", sep=";")
+summary(spam)
+
+# Check the share of spam vs. non-spam
+table(spam$label) %>% prop.table() %>% round(2)
+
+```
+
+# Maximizing the predictive ability of the algorithm
+
+To correctly classify new messages, we need to test different versions of the algorithm and choose the one with the most predictive power. To do that, we will divide up the dataset into three different data sets.
+
+* A *training set*: used to train the computer how to classify messages (80%, n=4,457). That is, by calculating conditional probabilities, we will expose the algorithm to examples of spam and non-spam messages;
+* A *cross-validation set*: This is a "new" set of messages that the algorithm has never seen. We will use this to assess how different choices of _alpha_ affect the prediction accuracy (10%, n=557);
+* A *test set*: used to test how good the spam filter is with classifying new messages (10%, n=557). This is another "new" set of messages that the algorithm has never seen.  
+
+```{r}
+# Number of samples in each dataset
+n <- nrow(spam)
+n_training <- as.integer(round(0.8*n)) 
+n_cval <- as.integer(round(0.1*n))
+n_test <- as.integer(round(0.1*n))
+
+```
+
+## Creating subsets by random selection
+
+To create the datasets, we need to create unique indices for each dataset and select rows that correspond to the indice. We make use of "sample" function to randomly generate numbers to be used as indice. It is important that there is no duplicate sample across the three data sets. That is, training set $Training \bigcap Validation \bigcap Test = \emptyset $. We also need to make sure that the ratio of spam messages in each set is constant. As long as the selection was random, the ratio will be constant.
+
+
+```{r}
+# Randomly generate numbers to use as indices for the training set.
+train_indices <- sample(1:n, size=n_training, replace=TRUE)
+
+# Get numbers that are not used in the training set
+remaining <- setdiff(1:n, train_indices)
+n_remaining <- length(remaining)
+
+# Allocate the remaining indices into cross-validation and test data sets
+cval_indices <- remaining[1:n_remaining/2]
+test_indices <- remaining[n_remaining/2+1:n_remaining]
+
+# Create datasets
+train <- spam[train_indices,]
+cval <- spam[cval_indices,]
+test <- spam[test_indices,]
+
+# Check the percentage of non-spam
+round(prop.table(table(train$label)),2)
+round(prop.table(table(cval$label)),2)
+round(prop.table(table(test$label)),2)
+
+```
+
+# Teach the algorithm to classify new messages using the training set.
+
+The Naive Bayes algorithm is based on the following equations that calculate the conditional probabilities: 
+
+$P(Spam|w_1, w_2, ...w_n) \propto P(Spam)*\prod_{n=1}^NP(w_i|Spam)$
+
+$P(Notspam|w_1, w_2, ...w_n) \propto P(Notspam)*\prod_{n=1}^NP(w_i|Notspam)$
+
+To avoid zeroes in the product, we need to use additive smoothing:
+
+$P(w_i|Spam) = \frac{N_{w_i|Spam} + \alpha}{N_{Spam}+\alpha * N_{vocab}}$
+
+$P(w_i|Notspam) = \frac{N_{w_i|Notspam} + \alpha}{N_{Notspam}+\alpha * N_{vocab}}$
+
+where
+
+* $N_{w_i|Spam}$ = the number of times the word $w_i$ occurs in spam messages
+* $N_{w_i|Notspam}$ = the number of times the word $w_i$ occurs in non-spam messages
+* $N_{Spam}$ = total number of words in spam messages
+* $N_{Notpsam}$ = total number of words in non-spam messages
+* $N_{Vocab}$ = total number of words in the vocabulary
+* $\alpha$ = the smoothing parameter
+
+## Cleaning data
+
+To calculate probabilities, we will need to count the number of words in each message. To do that, we need to clean the strings. 
+
+```{r}
+train_clean <- train %>%
+  mutate(
+    message=str_to_lower(message) %>%
+      str_squish() %>% # reduce repeated whitespace 
+      str_replace_all("[[:punct:]]", "") %>% # remove punctuations
+      str_replace_all("[\u0094\u0092\u0096\n\t]", "") %>% # remove Unicode characters
+      str_replace_all("[[:digit:]]", "") %>%
+      str_replace_all("\n", "") %>% # remove line breaks
+      str_replace_all("\t", "") )
+```
+
+Then, we create a set of all unique words in messages. The following code generates a vector containing all the words in the training set. 
+
+```{r}
+# Create vocabulary
+vocabulary <- NULL
+messages <- train_clean %>% pull(message)
+
+# Iterate through the messages and add to the vocabulary
+for (m in messages) {
+  words <- str_split(m, " ")[[1]]
+  vocabulary <- c(vocabulary, words)
+}
+
+# Remove duplicates from the vocabulary
+vocabulary <- vocabulary %>% unique()
+
+```
+
+## Calculating probabilities
+
+To begin with, let us arbitrarily set $\alpha$ to 1. Then we calculate $N_{Spam}$, $N_{Notspam}$, $N_{Vocabulary}$.
+
+```{r}
+n_spam <- train_clean %>% filter(label == "spam") %>%
+  pull() 
+n_notspam <- train_clean %>% filter(label ==" ham") %>%
+  pull()
+
+```
+
