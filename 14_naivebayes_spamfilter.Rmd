@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(readr)
 library(dplyr)
 library(stringr)
+library(purrr)
 
 ```
 
@@ -47,7 +48,7 @@ n_test <- as.integer(round(0.1*n))
 
 ## Creating subsets by random selection
 
-To create the datasets, we need to create unique indices for each dataset and select rows that correspond to the indice. We make use of "sample" function to randomly generate numbers to be used as indice. It is important that there is no duplicate sample across the three data sets. That is, training set $Training \bigcap Validation \bigcap Test = \emptyset $. We also need to make sure that the ratio of spam messages in each set is constant. As long as the selection was random, the ratio will be constant.
+To create the datasets, we need to create unique indices for each dataset and select rows that correspond to the indice. We make use of "sample" function to randomly generate numbers to be used as indice. It is important that there is no duplicate sample across the three data sets. That is, training set $Training \bigcap Validation \bigcap Test = \emptyset$. We also need to make sure that the ratio of spam messages in each set is constant. As long as the selection was random, the ratio will be constant.
 
 
 ```{r}
@@ -136,10 +137,108 @@ vocabulary <- vocabulary %>% unique()
 To begin with, let us arbitrarily set $\alpha$ to 1. Then we calculate $N_{Spam}$, $N_{Notspam}$, $N_{Vocabulary}$.
 
 ```{r}
-n_spam <- train_clean %>% filter(label == "spam") %>%
-  pull() 
-n_notspam <- train_clean %>% filter(label ==" ham") %>%
-  pull()
+# Create subsets of spam and non spam messages
+spam_ms <- train_clean %>% filter(label == "spam") %>%
+  pull(message) 
+notspam_ms <- train_clean %>% filter(label =="ham") %>%
+  pull(message)
 
+# Iterate through the messages and add to the vocabulary
+spam_vocab<- NULL
+for (sm in spam_ms) {
+  words <- str_split(sm, " ")[[1]]
+  spam_vocab <- c(spam_vocab, words)
+}
+
+ham_vocab <- NULL
+for (hm in notspam_ms) {
+  words <- str_split(hm, " ")[[1]]
+  ham_vocab <- c(ham_vocab, words)
+}
+
+# Count the number of vocabularies in each category
+n_spam <- spam_vocab %>% length()
+n_ham <- ham_vocab %>% length()
+n_vocabulary <- vocabulary %>% length()
+```
+
+Based on the number of vocabularies in spam, non-spam and all vocabularies, we can now calculate the marginal probabilities of a message being spam or non-spam in the training set. The following code will generate a tibble that has a column that represents a word, another column that counts the number of times the word occurs in spam message, and another column that represents the number of words this word appears in non-spam messages.
+
+```{r}
+# Calculate P(Spam) and P(non-spam)
+## Taking the mean of a boolean vector gives the probability of a message being spam or non-spam
+p_spam <- mean(train_clean$label=="spam")
+p_ham <- mean(train_clean$label == "ham")
+
+# Count the number of vocabularies in each dataset
+spam_vocab_count <- spam_vocab %>% table() %>% as.data.frame() 
+colnames(spam_vocab_count) <- c("word", "freq")
+
+ham_vocab_count <- ham_vocab %>% table() %>% as.data.frame()
+colnames(ham_vocab_count) <- c("word", "freq")
+
+# Join these tibbles together
+word_counts <- full_join(spam_vocab_count, ham_vocab_count, by="word") %>% rename(spam=freq.x, non_spam=freq.y) %>%
+  mutate(spam=ifelse(is.na(spam), 0, spam),
+         non_spam=ifelse(is.na(non_spam), 0, non_spam))
+  
+```
+
+With the parameters that we calculated above, we can calculate probabilities needed to run the spam filter. We should also create a function that takes in a new message and outputs a classification for the message. Then, we will map the function over the cross-validation set to see how well the function performs. 
+
+```{r}
+# A function that classifies messages 
+filter <- function(message, alpha=1){
+  
+  # Split and clean the new message
+  clean_message <- str_to_lower(message) %>%
+    str_squish() %>%
+    str_replace_all("[[punct:]]", "") %>% 
+    str_replace_all("[\u0094\u0092\u0096\n\t","") %>% 
+    str_replace_all("[[:digit:]]", "")
+  
+  words <- str_split(clean_message, " ")[[1]]
+  
+  # Account for the possibility that there will be words that don't appear in the training vocabulary
+  ## Find the words that are not in the training vocab
+  new_words <- setdiff(vocabulary, words)
+  
+  # Add them to the word_counts
+  new_word_probs <- tibble(
+    word = new_words,
+    spam_prob = 1,
+    ham_prob = 1
+  )
+  
+  # Filter the probabilities to the words present
+  present_probs <- word_counts %>% 
+    filter(word %in% words) %>% 
+    mutate(
+      # Calculate the probabilities from the counts
+      spam_prob = (spam_count + alpha) / (n_spam + alpha * n_vocabulary),
+      ham_prob = (ham_count + alpha) / (n_ham + alpha * n_vocabulary)) %>%
+        bind_rows(new_word_probs) %>% 
+        pivot_longer(
+          cols=c("spam_prob", "ham_prob"),
+          names_to="label",
+          values_to = "prob"
+        ) %>% 
+        group_by(label) %>%
+        summarize(
+          wi_prob = prod(prob)
+        )
+  # Calculate the conditional probabilities
+  p_spam_given_message <- p_spam*(present_probs %>% filter(label=="spam_prob") %>% pull(wi_prob))
+  p_ham_given_message <- p_ham*(present_probs %>% filter(label=="ham_prob"))
+  
+  # Classify the message based on the probability
+  ifelse(p_spam_given_message >= p_ham_given_message, "spam", "ham")
+}
+
+# try the function
+final_train <- train_clean %>% 
+  mutate(
+    prediction = map_chr(message), function(m) {filter(m)})
+  )
 ```
 
