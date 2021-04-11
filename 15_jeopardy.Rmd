@@ -1,0 +1,42 @@
+---
+title: "What is the right strategy to win Jeopardy?"
+author: "Uni Lee"
+date: "4/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(janitor)
+library(lubridate)
+```
+
+Have you ever watched Jeopardy? How about [Wer Wird Millinär](https://en.wikipedia.org/wiki/Wer_wird_Million%C3%A4r%3F_(German_game_show)? They are quiz shows that awards a large sum of money to people who solve trivia questions. To win the game, participants have to stufy a large database of trivia to increase chances of winning. There could be literally infinite number of trivia questions - Who has time to study them all? 
+
+We can find an optimal winning strategy by analyzing historical data. We will identify some patterns in the questions so that we can priortize topics that appear more often. 
+
+Dataquest provided a subset of a large dataset of questions from the US Jeopardy show. The dataset contains 20,000 questions from episodes that aired from September 1984 until January 2012.  
+
+
+```{r}
+jeopardy <- read.csv("data/15_jeopardy.csv") %>% clean_names()
+head(jeopardy, 5)
+unique(jeopardy$round) # Which round did the question come from?
+
+# Find the time range of episodes
+## First, change the column type to an appropriate format
+jeopardy <- jeopardy %>% 
+  mutate(air_date=ymd(air_date))
+
+max(jeopardy$air_date)
+min(jeopardy$air_date)
+
+
+
+```
+
+
+
+
