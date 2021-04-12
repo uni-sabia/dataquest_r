@@ -2,7 +2,9 @@
 title: "What is the right strategy to win Jeopardy?"
 author: "Uni Lee"
 date: "4/11/2021"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -14,7 +16,7 @@ library(lubridate)
 library(stringr)
 ```
 
-Have you ever watched Jeopardy? How about [Wer Wird Millinär](https://en.wikipedia.org/wiki/Wer_wird_Million%C3%A4r%3F_(German_game_show)? They are quiz shows that awards a large sum of money to people who solve trivia questions. To win the game, participants have to stufy a large database of trivia to increase chances of winning. There could be literally infinite number of trivia questions - Who has time to study them all? 
+Have you ever watched Jeopardy? How about [Wer Wird Millinär](https://en.wikipedia.org/wiki/Wer_wird_Million%C3%A4r%3F_(German_game_show))? They are quiz shows that awards a large sum of money to people who solve trivia questions. To win the game, participants have to stufy a large database of trivia to increase chances of winning. There could be literally infinite number of trivia questions - Who has time to study them all? 
 
 We can find an optimal winning strategy by analyzing historical data. We will identify some patterns in the questions so that we can priortize topics that appear more often. 
 
@@ -26,13 +28,6 @@ Dataquest provided a subset of a large dataset of questions from the US Jeopardy
 jeopardy <- read.csv("data/15_jeopardy.csv") %>% clean_names()
 head(jeopardy, 5)
 
-# Find the time range of episodes
-## First, change the column type to an appropriate format
-jeopardy <- jeopardy %>% 
-  mutate(air_date=ymd(air_date))
-
-max(jeopardy$air_date)
-min(jeopardy$air_date)
 
 ```
 
@@ -40,7 +35,7 @@ min(jeopardy$air_date)
 
 To make our analysis easier, we will first normalize the text data. First, we will lowercase all the words and remove any punctuation. 
 
-```{r}
+```{r warning=FALSE}
 jeopardy_cl <- jeopardy %>% mutate(
   category = tolower(category), #To lowercase
   question = tolower(question),
@@ -51,8 +46,10 @@ jeopardy_cl <- jeopardy %>% mutate(
   answer = str_replace_all(answer, "[^[:alnum:]]", " "),
   year = year(air_date), # Separate the air date into year, month, day
   month = month(air_date),
-  day = day(air_date)) %>%
+  day = day(air_date),
+  air_date=ymd(air_date)) %>%
   na.omit()
+
 
 ```
 
@@ -74,7 +71,6 @@ The following function performs such calculation for a given category.
 # Parameters
 n_questions <- nrow(jeopardy_cl)
 n_categories <- length(unique(jeopardy_cl$category))
-df <- n_categories - 1
 
 topics <- c("science", "history", "shakespeare")
 
@@ -121,14 +117,52 @@ unique_st <- strsplit(unique_st, " ") %>% unlist() # Split the strings by whites
 
 # Do particular topics have higher value in Jeopardy? 
 
-We can also optimize our winning strategy by only studying topics that have high value in the game. To do that, we will count how many high value (>800 or 800) and low value (<800) questions are associated with each term. 
+We can also optimize our winning strategy by only studying topics that have high value in the game. In the Jeopardy game, there are three low-value questions for every two high-value questions. We can set our null hypothesis to be "each category has the same share of high and low-value questions, at 2:3 ratio". The alternative hypothesis is then "some topics have different ratios for high and low-value questions". For very term that appear in the question, we will check the number of times that the question is high or low value. Using the chisq.test() function, we can calculate the p-value of the observed count of low and high value questions for each term. Note that the expected values are 2/5 for high-value and 3/5 for low-value questions. 
 
-In the Jeopardy game, there are three low-value questions for every two high-value questions. We can set our null hypothesis to be "each category has the same share of high and low-value questions, at 2:3 ratio". The alternative hypothesis is then "some topics have difference ratios for high and low-value questions". 
+The terms that have the lower p value are the terms that differ from the expected values. 
 
-```{r}
+```{r warning=FALSE}
 # Create an empty dataset
-test3 <- NULL
+value_data <- NULL
+questions <- pull(jeopardy_cl, question)
+values <- pull(jeopardy_cl, value)
 
+for (term in unique_st[1:50]) { # We take a subset of the whole list because it's too long!
+  n_high_v = 0
+  n_low_v = 0
+
+    for (i in 1:length(questions)) {
+      # Split the sentence
+      split = str_split(questions[i], " ")[[1]]
+      
+      # Check if the term is in the question and its value status
+      if(term %in% split & values[i] >=800) {
+        n_high_v = n_high_v + 1
+      } else if (term %in% split & values[i] < 800) {
+        n_low_v = n_low_v + 1
+      }
+    }
+  
+  # Chi-squared test
+  test = chisq.test(c(n_high_v, n_low_v), p = c(2/5, 3/5))
+  new_row = c(term, n_high_v, n_low_v, test$p.value)
+  
+  # Add (append) this to a new row in the empty dataset.
+  value_data <- rbind(value_data, new_row)
+  colnames(value_data) <- c("term", "n_high_v", "n_low_v", "p_value")
+  value_data <- as.data.frame(value_data) %>% distinct()
+} 
 ```
 
+```{r}
+value_data <- value_data %>% 
+  filter(n_high_v > n_low_v) %>% # only the ones that have higher ratio of high value questions
+  arrange(p_value)
+head(value_data, 10)
+```
+
+
+# Conclusion
+
+Our data showed that questions related to science, history and Shakespeare appear more often than other topics, rejecting the null hypothesis. Participants can benefit from focusing on these topics. They can further optimize their study strategy by focusing on questions related to terms that are associated higher proportion of high-value questions. 
 
