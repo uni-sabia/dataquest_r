@@ -11,19 +11,20 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(janitor)
 library(lubridate)
+library(stringr)
 ```
 
 Have you ever watched Jeopardy? How about [Wer Wird Millinär](https://en.wikipedia.org/wiki/Wer_wird_Million%C3%A4r%3F_(German_game_show)? They are quiz shows that awards a large sum of money to people who solve trivia questions. To win the game, participants have to stufy a large database of trivia to increase chances of winning. There could be literally infinite number of trivia questions - Who has time to study them all? 
 
 We can find an optimal winning strategy by analyzing historical data. We will identify some patterns in the questions so that we can priortize topics that appear more often. 
 
-Dataquest provided a subset of a large dataset of questions from the US Jeopardy show. The dataset contains 20,000 questions from episodes that aired from September 1984 until January 2012.  
+# Data: Jeopardy questions 1984 - 2012
 
+Dataquest provided a subset of a large dataset of questions from the US Jeopardy show. The dataset contains 20,000 questions from episodes that aired from September 1984 until January 2012. 
 
 ```{r}
 jeopardy <- read.csv("data/15_jeopardy.csv") %>% clean_names()
 head(jeopardy, 5)
-unique(jeopardy$round) # Which round did the question come from?
 
 # Find the time range of episodes
 ## First, change the column type to an appropriate format
@@ -33,10 +34,101 @@ jeopardy <- jeopardy %>%
 max(jeopardy$air_date)
 min(jeopardy$air_date)
 
+```
 
+## Normalizing strings
+
+To make our analysis easier, we will first normalize the text data. First, we will lowercase all the words and remove any punctuation. 
+
+```{r}
+jeopardy_cl <- jeopardy %>% mutate(
+  category = tolower(category), #To lowercase
+  question = tolower(question),
+  answer = tolower(question),
+  value = as.numeric(substr(value, 2, 1000000L)), # Get rid of the dollar sign
+  category = str_replace_all(category, "[^[:alnum:]]", " "), # Remove letters that are not alphabet or number
+  question = str_replace_all(question, "[^[:alnum:]]", " "),
+  answer = str_replace_all(answer, "[^[:alnum:]]", " "),
+  year = year(air_date), # Separate the air date into year, month, day
+  month = month(air_date),
+  day = day(air_date)) %>%
+  na.omit()
 
 ```
 
+# Hypothesis: The probability of the question being related to science, history and Shakespeare is higher than other cateogries.
 
+We hypothesize that questions related to science, history and Shakespeare occur more frequently than other topics. The null hypothesis is then that there is no difference between the probabilities of the topics of interest and other categories. 
+
+## Method: Chi-squared test
+
+We can apply Chi-squared test to see if there is a statistically significant difference between the expected and observed probabilities of getting a question related to science, history and Shakespeare. 
+
+First, we calculate the expected probability. There are `r length(unique(jeopardy_cl$category))` number of categories in this data set. If the null hypothesis is true, the probability of picking one category is expected to be `r 1/length(unique(jeopardy_cl$category))`. The probability of not picking this particular category is then `r 1-( 1/length(unique(jeopardy_cl$category)))`. 
+
+Second, we calculate the observed probability. The observed probabilities for a particular category can be calculated by counting the number of times that the topic appears in the Jeopardy show. As we have the observed and expected values, we can apply the Chi-squared test to see if there is a difference.
+
+The following function performs such calculation for a given category. 
+
+```{r}
+# Parameters
+n_questions <- nrow(jeopardy_cl)
+n_categories <- length(unique(jeopardy_cl$category))
+df <- n_categories - 1
+
+topics <- c("science", "history", "shakespeare")
+
+# Expected values
+expected_value <- n_questions*(1/n_categories)
+## Assuming that there is no difference in probability, we expected to see the same number frequencies among the categories. 
+E <- c(expected_value, expected_value, expected_value)
+
+# Observed values   
+science <- sum(str_count(jeopardy_cl$category, "science"))
+history <- sum(str_count(jeopardy_cl$category, "history"))
+shakespeare <- sum(str_count(jeopardy_cl$category, "shakespeare"))
+O <- c(science, history, shakespeare)
+
+# Put them into a table and calculate Chi-squared statistic
+chi_table <- tibble(topics, E, O) %>%
+  mutate(sqr_diff = (O-E)^2/E)
+
+chi_stat <- sum(chi_table$sqr_diff)
+
+# Get the p-value for this statistic
+p <- 1-pchisq(chi_stat, df=2)
+```
+
+The p-value of the Chi-squared statistic is 0. We can confidently reject the null hypothesis. In other words, science, history and Shakespeare more frequently than other topics. 
+
+# How often new questions appear? 
+
+The Jeopardy show recycles questions. That is, questions that appeared in the past are repeated. How often do new questions appear? The following code extracts all the unique terms that have appeared in Jeopardy questions. We will use this vector to check if they have been used previously when we see a question in the future.
+
+```{r}
+# Sort in the order of ascending air date
+jeopardy_cl <- jeopardy_cl %>% arrange(air_date)
+
+# Pull unique terms that appear in the questions
+unique_strings <- jeopardy_cl$question %>% unique() # This produces a string
+unique_strings <- strsplit(unique_strings, " ") %>% unlist() # Split the strings by whitespace into a list and then vectorize it
+
+# Remove words that are shorter than 7 words
+unique_st <- paste(unique_strings[nchar(unique_strings)>7], collapse=" ") # This produces a string
+unique_st <- strsplit(unique_st, " ") %>% unlist() # Split the strings by whitespace into a list and then vectorize it
+
+```
+
+# Do particular topics have higher value in Jeopardy? 
+
+We can also optimize our winning strategy by only studying topics that have high value in the game. To do that, we will count how many high value (>800 or 800) and low value (<800) questions are associated with each term. 
+
+In the Jeopardy game, there are three low-value questions for every two high-value questions. We can set our null hypothesis to be "each category has the same share of high and low-value questions, at 2:3 ratio". The alternative hypothesis is then "some topics have difference ratios for high and low-value questions". 
+
+```{r}
+# Create an empty dataset
+test3 <- NULL
+
+```
 
 
