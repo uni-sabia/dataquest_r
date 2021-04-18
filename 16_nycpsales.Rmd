@@ -1,0 +1,31 @@
+---
+title: "Predicting condominium sales prices"
+author: "Uni Lee"
+date: "4/18/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(janitor)
+```
+
+In this guided project, we will apply fundamentals of predictive modeling to predict condominium sales prices in New York City. We will use the size of a condominium as the main parameter for prediction. In addition, we will break the analysis down into five boroughs in New York City: Bronx, Brooklyn, Manhattan, Staten Island, and Queens. 
+
+To predict sales prices, we will build a binary regression model based on a dataset of rolling property sales of the last 12 months (March 2020 - February 2021) provided by [New York City Department of Finance](https://www1.nyc.gov/site/finance/taxes/property-rolling-sales-data.page). 
+
+```{r}
+# Load data 
+bronx <- read.csv("data/16_nycpsales/rollingsales_bronx.csv", sep=";") %>% clean_names()
+brooklyn <- read.csv("data/16_nycpsales/rollingsales_brooklyn.csv", sep=";") %>% clean_names()
+manhattan <- read.csv("data/16_nycpsales/rollingsales_manhattan.csv", sep=";") %>% clean_names()
+queens <- read.csv("data/16_nycpsales/rollingsales_queens.csv", sep=";") %>% clean_names()
+staten <- read.csv("data/16_nycpsales/rollingsales_statenisland.csv", sep=";") %>% clean_names()
+
+unique(bronx$borough) # Bronx is 2
+unique(brooklyn$borough) # Brookklyn is 3
+
+```
+
+
+
