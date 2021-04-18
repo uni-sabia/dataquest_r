@@ -8,11 +8,24 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(janitor)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
 ```
 
-In this guided project, we will apply fundamentals of predictive modeling to predict condominium sales prices in New York City. We will use the size of a condominium as the main parameter for prediction. In addition, we will break the analysis down into five boroughs in New York City: Bronx, Brooklyn, Manhattan, Staten Island, and Queens. 
+In this guided project, we will apply fundamentals of predictive modeling to predict property sales prices in New York City. The main focus of this study is two stories family house (Building code "A1"). We will use the size of the property as the main parameter for prediction. In addition, we will break the analysis down into five boroughs in New York City: Bronx, Brooklyn, Manhattan, Staten Island, and Queens. 
 
 To predict sales prices, we will build a binary regression model based on a dataset of rolling property sales of the last 12 months (March 2020 - February 2021) provided by [New York City Department of Finance](https://www1.nyc.gov/site/finance/taxes/property-rolling-sales-data.page). 
+
+# Data preparation 
+
+The property sales data are provided by each borough. The following code binds these data sets into a single dataframe. We will replace borough number with borough names for clarity. We will also exclude sales that are smaller than or equal to $10,000 because they are assumed to be exchanges among family members. 
+
+Note that as of July 2020, data for the gross square feet column are not collected due to the COVID-19 Pandemic. Therefore, we will drop cases that do not have this data. 
+
+Finally, we will subset the data for the building class of R4, which corresponds to "condominiums with elevators".  
 
 ```{r}
 # Load data 
@@ -22,10 +35,77 @@ manhattan <- read.csv("data/16_nycpsales/rollingsales_manhattan.csv", sep=";") %
 queens <- read.csv("data/16_nycpsales/rollingsales_queens.csv", sep=";") %>% clean_names()
 staten <- read.csv("data/16_nycpsales/rollingsales_statenisland.csv", sep=";") %>% clean_names()
 
+# Check how the boroughs are coded 
 unique(bronx$borough) # Bronx is 2
-unique(brooklyn$borough) # Brookklyn is 3
+unique(brooklyn$borough) # Brooklyn is 3
+unique(manhattan$borough) # Manhattan is 1
+unique(queens$borough) # Queens is 4
+unique(staten$borough) # Staten is 5
 
+# Bind the data sets into one
+nyc <- rbind(bronx, brooklyn, manhattan, queens, staten)
+
+# Remove original dataframes from memory
+rm(bronx, brooklyn, manhattan, queens, staten)
+
+# Replace borough number with borough name
+nyc <- nyc %>% 
+  mutate(
+    borough=
+      case_when(
+        borough==1 ~ "manhattan",
+        borough==2 ~ "bronx",
+        borough==3 ~ "brooklyn",
+        borough==4 ~ "queens",
+        borough==5 ~ "staten island",
+      )) %>% 
+  distinct() %>% # get unique values
+  mutate( # change the column type of sale price and size to to numeric
+    sale_price = 
+      str_replace(sale_price, ",", ""), 
+    sale_price = as.numeric(sale_price),
+    gross_square_feet = 
+      str_replace(gross_square_feet, ",", ""),
+    gross_square_feet = as.numeric(gross_square_feet)
+  ) %>%
+  filter(sale_price > 10000,# Exclude family exchanges
+         gross_square_feet > 0) %>%
+  arrange(borough, neighborhood) 
+
+nyc_clean <- nyc %>%
+  drop_na(sale_price, borough, gross_square_feet)
+
+nyc_a1 <- nyc_clean %>% 
+  filter(building_class_at_time_of_sale == "A1")
+
+readr::write_csv(nyc, "data/16_nycpsales/nyc.csv")
 ```
 
+# Exploratory plots
+
+
+```{r}
+# Generate scatterplot for all boroughs
+all <- ggplot(nyc_a1, aes(x=gross_square_feet, y=sale_price)) + 
+  geom_point(alpha=0.3) +
+  labs(x="Gross square feet", y="Sale price", fill="Borough") + 
+  geom_smooth(method="lm", se=FALSE) +
+  theme_minimal() +
+  scale_y_continuous(label=scales::comma) 
+
+# Generate scatterplot for each borough
+each <- ggplot(nyc_a1, aes(x=gross_square_feet, y=sale_price, color=borough)) + 
+  geom_point(alpha=0.3) +
+  labs(x="Gross square feet", y="Sale price", fill="Borough") +
+  geom_smooth(method="lm", se=FALSE) +
+  theme_minimal() +
+  scale_y_continuous(label=scales::comma) +
+  facet_wrap(~borough, nrow=2) +
+  theme(legend.position="none")
+
+ggarrange(all, each, ncol=2, widths=c(4.5,5),
+          labels= c("a)", "b)"))
+```
+ 
 
 
