@@ -2,7 +2,9 @@
 title: "Predicting condominium sales prices"
 author: "Uni Lee"
 date: "4/18/2021"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -13,9 +15,15 @@ library(stringr)
 library(tidyr)
 library(ggplot2)
 library(ggpubr)
+library(broom)
+library(stargazer)
+library(tidyverse)
+library(purrr)
 ```
 
 In this guided project, we will apply fundamentals of predictive modeling to predict property sales prices in New York City. The main focus of this study is two stories family house (Building code "A1"). We will use the size of the property as the main parameter for prediction. In addition, we will break the analysis down into five boroughs in New York City: Bronx, Brooklyn, Manhattan, Staten Island, and Queens. 
+
+Out of common sense, it can be hypothesized that there is a positive relationship between sales price and the size of the property. The null hypothesis is that there is no relationship between them. We will use linear regression model to test the hypothesis and estimate the strength of the relationship. 
 
 To predict sales prices, we will build a binary regression model based on a dataset of rolling property sales of the last 12 months (March 2020 - February 2021) provided by [New York City Department of Finance](https://www1.nyc.gov/site/finance/taxes/property-rolling-sales-data.page). 
 
@@ -25,22 +33,15 @@ The property sales data are provided by each borough. The following code binds t
 
 Note that as of July 2020, data for the gross square feet column are not collected due to the COVID-19 Pandemic. Therefore, we will drop cases that do not have this data. 
 
-Finally, we will subset the data for the building class of R4, which corresponds to "condominiums with elevators".  
+The final dataset only consists buildings with A1 class, which corresponds to "two-story, one-family dwellings". We will also limit the investigation to single-unit transaction to prevent cases of sales price misrepresentation. 
 
-```{r}
+```{r warning=FALSE}
 # Load data 
 bronx <- read.csv("data/16_nycpsales/rollingsales_bronx.csv", sep=";") %>% clean_names()
 brooklyn <- read.csv("data/16_nycpsales/rollingsales_brooklyn.csv", sep=";") %>% clean_names()
 manhattan <- read.csv("data/16_nycpsales/rollingsales_manhattan.csv", sep=";") %>% clean_names()
 queens <- read.csv("data/16_nycpsales/rollingsales_queens.csv", sep=";") %>% clean_names()
 staten <- read.csv("data/16_nycpsales/rollingsales_statenisland.csv", sep=";") %>% clean_names()
-
-# Check how the boroughs are coded 
-unique(bronx$borough) # Bronx is 2
-unique(brooklyn$borough) # Brooklyn is 3
-unique(manhattan$borough) # Manhattan is 1
-unique(queens$borough) # Queens is 4
-unique(staten$borough) # Staten is 5
 
 # Bind the data sets into one
 nyc <- rbind(bronx, brooklyn, manhattan, queens, staten)
@@ -53,11 +54,11 @@ nyc <- nyc %>%
   mutate(
     borough=
       case_when(
-        borough==1 ~ "manhattan",
-        borough==2 ~ "bronx",
-        borough==3 ~ "brooklyn",
-        borough==4 ~ "queens",
-        borough==5 ~ "staten island",
+        borough==1 ~ "Manhattan",
+        borough==2 ~ "Bronx",
+        borough==3 ~ "Brooklyn",
+        borough==4 ~ "Queens",
+        borough==5 ~ "Staten Island",
       )) %>% 
   distinct() %>% # get unique values
   mutate( # change the column type of sale price and size to to numeric
@@ -68,7 +69,7 @@ nyc <- nyc %>%
       str_replace(gross_square_feet, ",", ""),
     gross_square_feet = as.numeric(gross_square_feet)
   ) %>%
-  filter(sale_price > 10000,# Exclude family exchanges
+  filter(sale_price > 10000, # Exclude family exchanges
          gross_square_feet > 0) %>%
   arrange(borough, neighborhood) 
 
@@ -76,15 +77,17 @@ nyc_clean <- nyc %>%
   drop_na(sale_price, borough, gross_square_feet)
 
 nyc_a1 <- nyc_clean %>% 
-  filter(building_class_at_time_of_sale == "A1")
+  filter(building_class_at_time_of_sale == "A1",
+         total_units == 1) 
 
 readr::write_csv(nyc, "data/16_nycpsales/nyc.csv")
 ```
 
 # Exploratory plots
 
-
-```{r}
+To see if there is a relationship between the sale price and gross square feet variables, we have generated scatterplots for all five boroughs (a) and for individual boroughs (b). The scatterplots show that there is a positive relationship between the size of the property and sales price. 
+ 
+```{r message=FALSE}
 # Generate scatterplot for all boroughs
 all <- ggplot(nyc_a1, aes(x=gross_square_feet, y=sale_price)) + 
   geom_point(alpha=0.3) +
@@ -96,16 +99,171 @@ all <- ggplot(nyc_a1, aes(x=gross_square_feet, y=sale_price)) +
 # Generate scatterplot for each borough
 each <- ggplot(nyc_a1, aes(x=gross_square_feet, y=sale_price, color=borough)) + 
   geom_point(alpha=0.3) +
-  labs(x="Gross square feet", y="Sale price", fill="Borough") +
+  labs(x="Gross square feet", y="Sale price") +
   geom_smooth(method="lm", se=FALSE) +
   theme_minimal() +
   scale_y_continuous(label=scales::comma) +
   facet_wrap(~borough, nrow=2) +
   theme(legend.position="none")
 
-ggarrange(all, each, ncol=2, widths=c(4.5,5),
+graph2 <- ggarrange(all, each, ncol=2, widths=c(4.5,5),
           labels= c("a)", "b)"))
+annotate_figure(graph2, top = "scatterplots and linear regression line")
 ```
  
+# Outliers 
+
+Several outliers can be spotted on the graph. It seems that they are introducing downward bias to the regression line. We will eliminate them to increase the accuracy of regression models.  
+
+In Bronx, minimum sales price is 15,000. On the graph, the y-value of this datapoint is the most distanced from the regression line. In Brooklyn, the two data points below the sales price of 150,000 appear to be outliers. In Queens, three data points are outliers whose gross square feet are bigger than 3000 and sales price are lower than 20000. There are not significant outliers in Staten Island. 
 
 
+```{r}
+# What is the minimum sales price in Bronx? 
+min_bronx <- min(nyc_a1[which(nyc_a1$borough=="Bronx"),]$sale_price)
+
+# Exclude outliers
+nyc_a2 <- nyc_a1[!(nyc_a1$borough == "Bronx" & nyc_a1$sale_price == min_bronx),]
+nyc_a2 <- nyc_a2[!(nyc_a2$borough == "Brooklyn" & nyc_a2$sale_price < 150000),] 
+nyc_a2 <- nyc_a2[!(nyc_a2$borough == "Queens" & nyc_a2$sale_price < 200000 & nyc_a2$gross_square_feet > 3000),]
+```
+
+# Linear Regression
+
+The next step is building linear regression models to test the null hypothesis. We will build 2 models both data sets (with and without outliers). That way, we can see if taking the outliers was a good idea or not. 
+
+```{r}
+# Linear regression
+reg1 <- lm(sale_price ~ gross_square_feet, data=nyc_a1)
+reg2 <- lm(sale_price ~ gross_square_feet, data=nyc_a2)
+
+stargazer(reg1, reg2, type="html")
+```
+
+The linear regression results show that there is a statistically significant positive relationship between sales price and the size of the property for two-story family houses in NYC. We reject the null hypothesis. Taking out the outliers improved the fit of the model and decreases the residual standard error. Thus, we will continue our investigation with the dataset without the outliers. 
+
+For every unit increase in the size of the property (measured in square feet), the sales price increases by $149. The following code regenerates the scatterplots and linear regression line without the outliers. 
+
+```{r message=FALSE}
+# Generate scatterplot for all boroughs
+all <- ggplot(nyc_a2, aes(x=gross_square_feet, y=sale_price)) + 
+  geom_point(alpha=0.3) +
+  labs(x="Gross square feet", y="Sale price", fill="Borough") + 
+  geom_smooth(method="lm", se=FALSE) +
+  theme_minimal() +
+  scale_y_continuous(label=scales::comma) 
+
+# Generate scatterplot for each borough
+each <- ggplot(nyc_a2, aes(x=gross_square_feet, y=sale_price, color=borough)) + 
+  geom_point(alpha=0.3) +
+  labs(x="Gross square feet", y="Sale price") +
+  geom_smooth(method="lm", se=FALSE) +
+  theme_minimal() +
+  scale_y_continuous(label=scales::comma) +
+  facet_wrap(~borough, nrow=2) +
+  theme(legend.position="none")
+
+graph2<- ggarrange(all, each, ncol=2, widths=c(4.5,5),
+          labels= c("a)", "b)"))
+annotate_figure(graph2, top = "Scatterplots and regression line without outliers")
+```
+
+# Regression Models for Each Borough
+
+Building separate models for each borough will increase their accuracy. The following code utilizes the broom, purr and tidyverse packages to generate many models. 
+
+```{r}
+# Nest the dataframe by a categorical variable
+nyc_nested <- nyc_a1 %>%
+  arrange(borough) %>%
+  group_by(borough) %>%
+  nest() %>% 
+  mutate(linear_model = map(.x = data,
+                            .f = ~lm(sale_price ~ gross_square_feet,
+                                     data=.))) %>% # Generate many linear models
+  mutate(coefficients = map(.x=linear_model,# Generate list-column 
+                            .f=tidy, # of tidy coefficients summaries 
+                            conf.int=TRUE))  # with confidence intervals 
+
+# Unnest list-column of tidy coefficient summaries to return a tidy dataframe
+tidy_coefficients <- nyc_nested %>%
+  select(borough, coefficients) %>%
+  unnest(cols=coefficients) %>%
+  filter(term=="gross_square_feet") %>% # filter for coefficients only
+  arrange(estimate)
+
+tidy_coefficients %>% select(-term) %>%
+  mutate(across(where(is.numeric), ~round(.x, 5))) # round all results 
+
+```
+
+All of the regression models for each borough are statistically significant (p.value < 0.001). The increase in sales price for a unit increase in the property size is the steepest in Staten Island, and the lowest in Bronx. In other words, a family house in Bronx will cost less per square foot than in any other boroughs. 
+
+# Goodness of fit of each model 
+
+To test the goodness of fit of each model, we will compare the summay statistics of each regression model. 
+
+```{r}
+nyc_nested2 <- nyc_a1 %>% 
+  arrange(borough) %>%
+  group_by(borough) %>%
+  nest() %>%
+  mutate(linear_model = map(.x=data,
+                            .f= ~lm(sale_price ~ gross_square_feet,
+                                    data=.))) %>%
+  mutate(summary_stats = map(.x=linear_model,
+                             .f=glance)) 
+
+nyc_summary <- nyc_nested2 %>%
+  select(borough, summary_stats) %>%
+  unnest(cols=summary_stats)
+
+nyc_summary %>% 
+  mutate(across(where(is.numeric), ~round(.x, 4))) %>%
+  select(borough, r.squared, adj.r.squared, sigma, statistic, p.value)
+```
+
+The model for Bronx has the lowest predicting power. The R-Squared scored is only 0.0603, which means that only 6.03% of the data points are explained by the model. The model for Staten Island has the highest R-Squared. We can increase the fit of the model by including omitted variables such as the year it was built and neighborhood. 
+
+# How much would a house of 3000 square feet cost in NYC? 
+
+Finally, we will apply the models we built to estimate the cost of housing for a 2500 or 3000-square-feet house. 
+
+```{r}
+# Predict values for each borough 
+predicted <- data.frame(matrix(nrow=4, ncol=2)) # Prep a container for storing results
+colnames(predicted) <- c("sale_price_2500", "sale_price_3000")
+size <- data.frame(gross_square_feet=c(2500, 3000))
+for (borough in c("Bronx", "Brooklyn", "Queens", "Staten Island")) {
+  model <- lm(sale_price ~ gross_square_feet, 
+              data=nyc_a2[which(nyc_a2$borough==borough),])
+  predicted[borough, 1:2]<- predict(model, newdata=size)
+  
+}
+
+predicted <- predicted[5:8,]
+predicted
+
+```
+
+```{r warning=FALSE}
+# Prep the data frame for graphing
+predicted$borough <- rownames(predicted) # Turn rownames into column names
+rownames(predicted) <- NULL
+
+predicted_long <- predicted %>% pivot_longer(cols=c(sale_price_2500, sale_price_3000),
+                                             names_to = "size_sqf",
+                                             names_prefix = "sale_price_",
+                                             values_to = "sale_price")
+# Graph results
+ggplot(predicted_long, aes(x=borough, y=sale_price, fill=size_sqf)) +
+  geom_col(identity="stat", position="dodge") +
+  theme_classic() + 
+  labs(title="Prediction of property sales price", 
+       y = "Sales price",
+       fill = "Gross square feet") + 
+  theme(axis.title.x=element_blank(),
+        legend.position="bottom") 
+```
+
+The predicted sales price for houses that are 2500 or 3000 square feet are the highest in Brooklyn and the lowest in Bronx. They cost 631,191.4 USD, 674,903.6 in Bronx, and 876,697.1 USD, 954,369.9 USD in Brooklyn, respectively. 
