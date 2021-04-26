@@ -1,0 +1,30 @@
+---
+title: "Predicting car prices using basic machine learning technique"
+author: "Uni Lee"
+date: "4/26/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(tidyverse)
+```
+
+Machine learning is the process of finding patterns or rules from existing data to build a model that predicts outcomes based on features of interest. In particular, the k-nearest neighbors method calculates the Euclidean distance (a metric that measures similarity) between a new data point and existing data points to find the closest neighbors to predict values of interest.
+
+In this guided project, we will apply the k-nearest neighbors algorithm to predict car prices. We will train our "machine" using Jeffrey Schlimmer's Automobile Dataset available at the [UCI Machine Learning Archive](https://archive.ics.uci.edu/ml/datasets/automobile). The data consists of information on the specification of an automobile (characteristics), insurance risk rating and its normalized losses in comparison to other cars. Insurance risk rating is denoted as "symboling", which indicates high risk with positive values and low risk with negative values (+3 = high risk, -3 = low risk). Normalized losses represents the average loss per car per year. The values take the relative average loss payment per insured vehicle year, normalized for all automobiles.   
+
+```{r}
+cars <- read.table("data/17_automobile.data", sep=",")
+# Rename columns as given in the data descrption https://archive.ics.uci.edu/ml/datasets/automobile 
+colnames(cars) <- c("symboling", "normalized_losses", "make", "fuel_type", "aspiration", "num_doors", "body_style", "drive_wheels", "engine_location", "wheel_base", "length", "width", "height", "curb_weight", "engine_type", "num_cylinders", "engine_size", "fuel_system", "bore", "stroke", "compression_ratio", "horsepower", "peak_rpm", "city_mpg", "highway_mpg", "price")
+
+head(cars)
+```
+
+The goal of this project is to predict the automobile price, which corresponds to the last column of the dataset, "price". It is a continuous variable. Since k-nearest neighbor method uses "Euclidean distance" to measure similarity between the input and existing data points, we can only use numeric variables as features used to predict the price. 
+
+
+
