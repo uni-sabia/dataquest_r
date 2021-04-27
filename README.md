@@ -15,5 +15,6 @@ Guided projects
 12. "Has Fandango.com fixed the 'bug' in its rating system?" - Frequency distribution
 test
 13. What are my change of winning the lottery? - Permutations and Combinations
-14. Predicting housing prices in New York City using a regression model
-15. Predicting car prices using k-neareast neighbor model (library: caret)
+14. Creating a spam filter using Naive Bayes Theorem
+15. Predicting housing prices in New York City using a regression model
+16. Predicting car prices using k-neareast neighbor model (library: caret)
